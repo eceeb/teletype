@@ -12,6 +12,9 @@ final class TerminalView: NSView {
     private let cellHeight: CGFloat
     private let padding: CGFloat = 4
 
+    /// Called with raw bytes to send to the shell when the user types.
+    var onInput: ((Data) -> Void)?
+
     init(emulator: TerminalEmulator) {
         self.emulator = emulator
         self.font = NSFont.monospacedSystemFont(ofSize: 13, weight: .regular)
@@ -25,6 +28,15 @@ final class TerminalView: NSView {
 
     // Draw rows from the top down.
     override var isFlipped: Bool { true }
+
+    // MARK: - Keyboard input
+
+    override var acceptsFirstResponder: Bool { true }
+
+    override func keyDown(with event: NSEvent) {
+        guard let characters = event.characters, !characters.isEmpty else { return }
+        onInput?(Data(characters.utf8))
+    }
 
     override func draw(_ dirtyRect: NSRect) {
         super.draw(dirtyRect)

@@ -2,7 +2,7 @@ import AppKit
 import Foundation
 import TeletypeCore
 
-/// Minimal app shell: one window hosting a live terminal session.
+/// Minimal app shell: one window hosting a live, interactive terminal session.
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var window: NSWindow?
@@ -18,13 +18,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         window.title = "teletype"
         window.center()
 
-        // Live session: the shell's output streams into the grid; redraw on update.
+        // Live session: shell output streams into the grid; redraw on update.
         let session = TerminalSession(columns: 80, rows: 24)
         let terminalView = TerminalView(emulator: session.emulator)
         session.onUpdate = { [weak terminalView] in
             terminalView?.needsDisplay = true
         }
         session.onExit = { NSApp.terminate(nil) }
+
+        // Keyboard: typed bytes go straight to the shell, which echoes them
+        // back via the PTY so they appear on screen.
+        terminalView.onInput = { [weak session] data in
+            session?.write(data)
+        }
+
         window.contentView = terminalView
 
         // Shell is freely choosable: default to the user's login shell ($SHELL).
@@ -39,6 +46,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         self.session = session
 
         window.makeKeyAndOrderFront(nil)
+        window.makeFirstResponder(terminalView)
         self.window = window
         NSApp.activate(ignoringOtherApps: true)
     }
