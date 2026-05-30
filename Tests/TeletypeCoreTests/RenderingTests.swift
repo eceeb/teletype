@@ -39,4 +39,15 @@ struct CellColorTests {
         #expect(cell?.foreground == TerminalPalette.standard.defaultBackground)
         #expect(cell?.background == TerminalPalette.standard.defaultForeground)
     }
+
+    @Test func styleFlags() {
+        #expect(firstCell(after: "\u{1b}[1mB")?.bold == true)        // SGR 1 bold
+        #expect(firstCell(after: "\u{1b}[3mI")?.italic == true)      // SGR 3 italic
+        #expect(firstCell(after: "\u{1b}[4mU")?.underline == true)   // SGR 4 underline
+        #expect(firstCell(after: "X")?.bold == false)
+    }
+
+    @Test func wideCharacterSpansTwoColumns() {
+        #expect(firstCell(after: "世")?.width == 2)   // CJK = double-width
+    }
 }

@@ -132,6 +132,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             shellMenu.addItem(item)
         }
 
+        // Edit menu (Paste for now; copy/selection comes with mouse selection)
+        let editItem = NSMenuItem()
+        mainMenu.addItem(editItem)
+        let editMenu = NSMenu(title: "Edit")
+        editItem.submenu = editMenu
+        editMenu.addItem(withTitle: "Paste",
+                         action: #selector(NSText.paste(_:)),
+                         keyEquivalent: "v")
+
         NSApp.mainMenu = mainMenu
     }
 }

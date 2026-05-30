@@ -8,6 +8,7 @@ import TeletypeCore
 final class TerminalView: NSView {
     private let emulator: TerminalEmulator
     private let font: NSFont
+    private let boldFont: NSFont
     private let cellWidth: CGFloat
     private let cellHeight: CGFloat
     private let padding: CGFloat = 4
@@ -19,6 +20,7 @@ final class TerminalView: NSView {
         self.emulator = emulator
         let font = NSFont.monospacedSystemFont(ofSize: 13, weight: .regular)
         self.font = font
+        self.boldFont = NSFont.monospacedSystemFont(ofSize: 13, weight: .bold)
         self.cellWidth = font.maximumAdvancement.width
         self.cellHeight = ceil(font.ascender - font.descender + font.leading)
         super.init(frame: .zero)
@@ -43,6 +45,12 @@ final class TerminalView: NSView {
         onInput?(Data(characters.utf8))
     }
 
+    /// Cmd-V: send the clipboard's text to the shell.
+    @objc func paste(_ sender: Any?) {
+        guard let string = NSPasteboard.general.string(forType: .string) else { return }
+        onInput?(Data(string.utf8))
+    }
+
     // MARK: - Drawing
 
     override func draw(_ dirtyRect: NSRect) {
@@ -65,10 +73,12 @@ final class TerminalView: NSView {
 
                 // Skip blanks and the trailing half of a wide glyph (width 0).
                 if cell.width > 0, cell.character != " " {
-                    let attributes: [NSAttributedString.Key: Any] = [
-                        .font: font,
+                    var attributes: [NSAttributedString.Key: Any] = [
+                        .font: cell.bold ? boldFont : font,
                         .foregroundColor: nsColor(cell.foreground)
                     ]
+                    if cell.italic { attributes[.obliqueness] = 0.2 }
+                    if cell.underline { attributes[.underlineStyle] = NSUnderlineStyle.single.rawValue }
                     (String(cell.character) as NSString).draw(at: rect.origin, withAttributes: attributes)
                 }
             }
