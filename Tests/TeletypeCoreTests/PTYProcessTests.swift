@@ -6,11 +6,14 @@ struct PTYProcessTests {
     @Test func spawnsCommandAndReadsItsOutput() throws {
         let pty = PTYProcess()
         try pty.start(executable: "/bin/echo", arguments: ["hello"])
+        defer { pty.terminate() }
 
+        // Bounded read: PTY end-of-file on macOS is racy (EIO vs. block), so
+        // never read blocking-without-timeout in a test.
         var output = Data()
         while true {
-            let chunk = pty.read()
-            if chunk.isEmpty { break }   // EOF: child exited, slave closed
+            let chunk = pty.read(timeoutMillis: 1000)
+            if chunk.isEmpty { break }   // EOF or no more output
             output.append(chunk)
         }
 

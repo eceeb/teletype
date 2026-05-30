@@ -7,7 +7,8 @@ let package = Package(
         .macOS(.v14)
     ],
     products: [
-        .library(name: "TeletypeCore", targets: ["TeletypeCore"])
+        .library(name: "TeletypeCore", targets: ["TeletypeCore"]),
+        .executable(name: "Teletype", targets: ["Teletype"])
     ],
     dependencies: [
         .package(url: "https://github.com/migueldeicaza/SwiftTerm.git", from: "1.0.0")
@@ -18,6 +19,10 @@ let package = Package(
             dependencies: [
                 .product(name: "SwiftTerm", package: "SwiftTerm")
             ]
+        ),
+        .executableTarget(
+            name: "Teletype",
+            dependencies: ["TeletypeCore"]
         ),
         .testTarget(
             name: "TeletypeCoreTests",
