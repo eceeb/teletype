@@ -64,6 +64,56 @@ public final class TerminalEmulator {
         )
     }
 
+    /// The text covered by a selection from `a` to `b` (inclusive of both
+    /// cells). Rows are joined by newlines and each row's trailing whitespace
+    /// is trimmed. The endpoints may be given in any order.
+    public func text(from a: GridPosition, to b: GridPosition) -> String {
+        let (start, end) = a <= b ? (a, b) : (b, a)
+        let firstRow = max(0, start.row)
+        let lastRow = min(rows - 1, end.row)
+        guard firstRow <= lastRow else { return "" }
+
+        var result: [String] = []
+        for row in firstRow...lastRow {
+            let fromColumn = (row == start.row) ? max(0, start.column) : 0
+            let toColumn = (row == end.row) ? min(columns - 1, end.column) : (columns - 1)
+            var rowText = ""
+            if fromColumn <= toColumn {
+                for column in fromColumn...toColumn {
+                    rowText.append(cell(row: row, col: column)?.character ?? " ")
+                }
+            }
+            while rowText.hasSuffix(" ") { rowText.removeLast() }
+            result.append(rowText)
+        }
+        return result.joined(separator: "\n")
+    }
+
+    /// The word (a run of non-space characters) containing `position`. If the
+    /// cell itself is blank, returns just that cell.
+    public func wordRange(at position: GridPosition) -> (GridPosition, GridPosition) {
+        let row = position.row
+        func isSpace(_ column: Int) -> Bool {
+            (cell(row: row, col: column)?.character ?? " ") == " "
+        }
+        guard !isSpace(position.column) else { return (position, position) }
+
+        var left = position.column
+        var right = position.column
+        while left > 0, !isSpace(left - 1) { left -= 1 }
+        while right < columns - 1, !isSpace(right + 1) { right += 1 }
+        return (GridPosition(row: row, column: left), GridPosition(row: row, column: right))
+    }
+
+    /// A row's content range: column 0 to its last non-blank column.
+    public func lineRange(atRow row: Int) -> (GridPosition, GridPosition) {
+        var last = 0
+        for column in 0..<columns where (cell(row: row, col: column)?.character ?? " ") != " " {
+            last = column
+        }
+        return (GridPosition(row: row, column: 0), GridPosition(row: row, column: last))
+    }
+
     /// Minimal delegate: every callback has a default no-op except `send`,
     /// which the terminal uses to reply to the host (wired up later).
     private final class NoopDelegate: TerminalDelegate {

@@ -1,5 +1,18 @@
 import SwiftTerm
 
+/// A position in the grid: 0-based row from the top, 0-based column.
+public struct GridPosition: Equatable, Comparable, Sendable {
+    public let row: Int
+    public let column: Int
+    public init(row: Int, column: Int) {
+        self.row = row
+        self.column = column
+    }
+    public static func < (lhs: GridPosition, rhs: GridPosition) -> Bool {
+        (lhs.row, lhs.column) < (rhs.row, rhs.column)
+    }
+}
+
 /// A 24-bit RGB color. UI-neutral so the core stays free of AppKit.
 public struct TermColor: Equatable, Sendable {
     public let red, green, blue: UInt8

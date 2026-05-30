@@ -156,6 +156,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         mainMenu.addItem(editItem)
         let editMenu = NSMenu(title: "Edit")
         editItem.submenu = editMenu
+        editMenu.addItem(withTitle: "Copy",
+                         action: #selector(NSText.copy(_:)),
+                         keyEquivalent: "c")
         editMenu.addItem(withTitle: "Paste",
                          action: #selector(NSText.paste(_:)),
                          keyEquivalent: "v")

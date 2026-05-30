@@ -18,6 +18,8 @@ final class TerminalView: NSView {
     /// Called with the (columns, rows) that fit the view whenever that changes.
     var onResize: ((Int, Int) -> Void)?
     private var lastGridSize: (cols: Int, rows: Int)?
+    private var selectionStart: GridPosition?
+    private var selectionEnd: GridPosition?
 
     init(emulator: TerminalEmulator) {
         self.emulator = emulator
@@ -54,6 +56,64 @@ final class TerminalView: NSView {
         onInput?(Data(string.utf8))
     }
 
+    // MARK: - Mouse selection
+
+    override func mouseDown(with event: NSEvent) {
+        window?.makeFirstResponder(self)   // clicking a pane focuses it
+        let position = gridPosition(at: convert(event.locationInWindow, from: nil))
+        switch event.clickCount {
+        case 2:   // double-click selects the word
+            let (start, end) = emulator.wordRange(at: position)
+            selectionStart = start
+            selectionEnd = end
+        case 3:   // triple-click selects the line
+            let (start, end) = emulator.lineRange(atRow: position.row)
+            selectionStart = start
+            selectionEnd = end
+        default:
+            selectionStart = position
+            selectionEnd = position
+        }
+        needsDisplay = true
+    }
+
+    override func mouseDragged(with event: NSEvent) {
+        selectionEnd = gridPosition(at: convert(event.locationInWindow, from: nil))
+        needsDisplay = true
+    }
+
+    override func mouseUp(with event: NSEvent) {
+        // A plain single click (no drag, no double/triple) clears the selection.
+        if event.clickCount <= 1, selectionStart == selectionEnd {
+            selectionStart = nil
+            selectionEnd = nil
+            needsDisplay = true
+        }
+    }
+
+    /// Cmd-C: copy the selected text to the clipboard.
+    @objc func copy(_ sender: Any?) {
+        guard let start = selectionStart, let end = selectionEnd, start != end else { return }
+        let text = emulator.text(from: start, to: end)
+        guard !text.isEmpty else { return }
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(text, forType: .string)
+    }
+
+    private func gridPosition(at point: NSPoint) -> GridPosition {
+        let column = Int((point.x - padding) / cellWidth)
+        let row = Int((point.y - padding) / cellHeight)
+        return GridPosition(row: max(0, min(emulator.rows - 1, row)),
+                            column: max(0, min(emulator.columns - 1, column)))
+    }
+
+    private func isSelected(row: Int, column: Int) -> Bool {
+        guard let s = selectionStart, let e = selectionEnd, s != e else { return false }
+        let (start, end) = s <= e ? (s, e) : (e, s)
+        let position = GridPosition(row: row, column: column)
+        return position >= start && position <= end
+    }
+
     // MARK: - Layout
 
     override func setFrameSize(_ newSize: NSSize) {
@@ -88,6 +148,11 @@ final class TerminalView: NSView {
 
                 nsColor(cell.background).setFill()
                 rect.fill()
+
+                if isSelected(row: row, column: col) {
+                    NSColor.white.withAlphaComponent(0.25).setFill()
+                    rect.fill()
+                }
 
                 // Skip blanks and the trailing half of a wide glyph (width 0).
                 if cell.width > 0, cell.character != " " {
