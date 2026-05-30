@@ -11,11 +11,15 @@ public final class TerminalEmulator {
     private let terminal: Terminal
     private let delegate: NoopDelegate
     private let palette = TerminalPalette.standard
+    /// The display offset of the live (newest) screen — the bottom scroll bound.
+    private var liveBottom = 0
 
     public init(columns: Int = 80, rows: Int = 24) {
         delegate = NoopDelegate()
         terminal = Terminal(delegate: delegate)
         terminal.resize(cols: columns, rows: rows)
+        // Track the live bottom: SwiftTerm reports it whenever output scrolls.
+        delegate.onScrolled = { [weak self] yDisp in self?.liveBottom = yDisp }
     }
 
     /// Feeds raw output bytes into the parser, updating the grid.
@@ -47,6 +51,19 @@ public final class TerminalEmulator {
 
     /// Whether the cursor should be drawn (program can hide it via DECTCEM).
     public var cursorVisible: Bool { delegate.cursorVisible }
+
+    /// Scrolls the viewport by `lines` (positive = toward older output).
+    public func scroll(lines: Int) {
+        terminal.buffer.yDisp = max(0, min(liveBottom, terminal.buffer.yDisp - lines))
+    }
+
+    /// Jumps the viewport back to the live (newest) output.
+    public func scrollToBottom() {
+        terminal.buffer.yDisp = liveBottom
+    }
+
+    /// Whether the viewport is scrolled away from the live bottom.
+    public var isScrolledBack: Bool { terminal.buffer.yDisp < liveBottom }
 
     /// Resizes the grid to the given dimensions (SwiftTerm reflows the buffer).
     public func resize(columns: Int, rows: Int) {
@@ -131,8 +148,10 @@ public final class TerminalEmulator {
     /// which the terminal uses to reply to the host (wired up later).
     private final class NoopDelegate: TerminalDelegate {
         var cursorVisible = true
+        var onScrolled: ((Int) -> Void)?
         func send(source: Terminal, data: ArraySlice<UInt8>) {}
         func showCursor(source: Terminal) { cursorVisible = true }
         func hideCursor(source: Terminal) { cursorVisible = false }
+        func scrolled(source: Terminal, yDisp: Int) { onScrolled?(yDisp) }
     }
 }
