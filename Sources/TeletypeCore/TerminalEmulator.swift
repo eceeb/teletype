@@ -35,6 +35,10 @@ public final class TerminalEmulator {
     /// Number of columns in the grid.
     public var columns: Int { terminal.cols }
 
+    /// Whether the program enabled application cursor keys (DECCKM) — decides
+    /// whether the arrow keys send ESC O x (application) or ESC [ x (normal).
+    public var applicationCursorKeys: Bool { terminal.applicationCursor }
+
     /// Resizes the grid to the given dimensions (SwiftTerm reflows the buffer).
     public func resize(columns: Int, rows: Int) {
         terminal.resize(cols: columns, rows: rows)
