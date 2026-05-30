@@ -1,14 +1,14 @@
 import AppKit
 import TeletypeCore
 
-/// Draws a `TerminalEmulator`'s grid: monospaced white text on black, one line
-/// per row, via AppKit/CoreText string drawing.
-///
-/// This is the deliberately-simple first renderer. A GPU (Metal) renderer can
-/// replace `draw(_:)` later without touching the rest of the app.
+/// Draws a `TerminalEmulator`'s grid cell by cell: each cell filled with its
+/// background color, the glyph drawn in its foreground color (monospaced, via
+/// AppKit/CoreText). A GPU (Metal) renderer can replace `draw(_:)` later without
+/// touching the rest of the app.
 final class TerminalView: NSView {
     private let emulator: TerminalEmulator
     private let font: NSFont
+    private let cellWidth: CGFloat
     private let cellHeight: CGFloat
     private let padding: CGFloat = 4
 
@@ -17,7 +17,9 @@ final class TerminalView: NSView {
 
     init(emulator: TerminalEmulator) {
         self.emulator = emulator
-        self.font = NSFont.monospacedSystemFont(ofSize: 13, weight: .regular)
+        let font = NSFont.monospacedSystemFont(ofSize: 13, weight: .regular)
+        self.font = font
+        self.cellWidth = font.maximumAdvancement.width
         self.cellHeight = ceil(font.ascender - font.descender + font.leading)
         super.init(frame: .zero)
         wantsLayer = true
@@ -41,21 +43,42 @@ final class TerminalView: NSView {
         onInput?(Data(characters.utf8))
     }
 
-    override func draw(_ dirtyRect: NSRect) {
-        super.draw(dirtyRect)
-        NSColor.black.setFill()
-        dirtyRect.fill()
+    // MARK: - Drawing
 
-        let attributes: [NSAttributedString.Key: Any] = [
-            .font: font,
-            .foregroundColor: NSColor.white
-        ]
+    override func draw(_ dirtyRect: NSRect) {
+        NSColor.black.setFill()
+        bounds.fill()
 
         for row in 0..<emulator.rows {
-            let text = emulator.line(row)
-            if text.isEmpty { continue }
-            let y = padding + CGFloat(row) * cellHeight
-            (text as NSString).draw(at: CGPoint(x: padding, y: y), withAttributes: attributes)
+            for col in 0..<emulator.columns {
+                guard let cell = emulator.cell(row: row, col: col) else { continue }
+                let span = cell.width == 2 ? 2 : 1
+                let rect = CGRect(
+                    x: padding + CGFloat(col) * cellWidth,
+                    y: padding + CGFloat(row) * cellHeight,
+                    width: cellWidth * CGFloat(span),
+                    height: cellHeight
+                )
+
+                nsColor(cell.background).setFill()
+                rect.fill()
+
+                // Skip blanks and the trailing half of a wide glyph (width 0).
+                if cell.width > 0, cell.character != " " {
+                    let attributes: [NSAttributedString.Key: Any] = [
+                        .font: font,
+                        .foregroundColor: nsColor(cell.foreground)
+                    ]
+                    (String(cell.character) as NSString).draw(at: rect.origin, withAttributes: attributes)
+                }
+            }
         }
+    }
+
+    private func nsColor(_ color: TermColor) -> NSColor {
+        NSColor(srgbRed: CGFloat(color.red) / 255,
+                green: CGFloat(color.green) / 255,
+                blue: CGFloat(color.blue) / 255,
+                alpha: 1)
     }
 }

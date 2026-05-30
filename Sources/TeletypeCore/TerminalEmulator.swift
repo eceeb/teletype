@@ -10,6 +10,7 @@ import SwiftTerm
 public final class TerminalEmulator {
     private let terminal: Terminal
     private let delegate: NoopDelegate
+    private let palette = TerminalPalette.standard
 
     public init(columns: Int = 80, rows: Int = 24) {
         delegate = NoopDelegate()
@@ -33,6 +34,29 @@ public final class TerminalEmulator {
 
     /// Number of columns in the grid.
     public var columns: Int { terminal.cols }
+
+    /// The fully-resolved cell at the given position (row 0 / col 0 = top-left
+    /// of the visible area): character, colors (inverse applied), width and
+    /// styling. Returns nil if out of bounds.
+    public func cell(row: Int, col: Int) -> TerminalCell? {
+        guard let data = terminal.getCharData(col: col, row: row) else { return nil }
+        let attribute = data.attribute
+        var foreground = palette.color(for: attribute.fg, isForeground: true)
+        var background = palette.color(for: attribute.bg, isForeground: false)
+        if attribute.style.contains(.inverse) {
+            swap(&foreground, &background)
+        }
+        let raw = data.getCharacter()
+        let character: Character = (raw.unicodeScalars.first?.value ?? 0) == 0 ? " " : raw
+        return TerminalCell(
+            character: character,
+            foreground: foreground,
+            background: background,
+            width: Int(data.width),
+            bold: attribute.style.contains(.bold),
+            underline: attribute.style.contains(.underline)
+        )
+    }
 
     /// Minimal delegate: every callback has a default no-op except `send`,
     /// which the terminal uses to reply to the host (wired up later).
