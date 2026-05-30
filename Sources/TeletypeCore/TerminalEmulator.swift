@@ -54,6 +54,7 @@ public final class TerminalEmulator {
             background: background,
             width: Int(data.width),
             bold: attribute.style.contains(.bold),
+            italic: attribute.style.contains(.italic),
             underline: attribute.style.contains(.underline)
         )
     }

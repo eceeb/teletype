@@ -19,6 +19,7 @@ public struct TerminalCell: Equatable, Sendable {
     /// Columns the glyph spans: 1, or 2 for wide glyphs; 0 = trailing half of a wide glyph.
     public let width: Int
     public let bold: Bool
+    public let italic: Bool
     public let underline: Bool
 }
 
