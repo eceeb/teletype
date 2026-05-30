@@ -13,7 +13,7 @@ final class TerminalWindowController: NSWindowController, NSWindowDelegate {
     /// Called when this tab's window becomes key (for MRU tab tracking).
     var onActivated: ((TerminalWindowController) -> Void)?
 
-    init() {
+    init(executable: String? = nil, arguments: [String] = []) {
         let pane = TerminalPane()
 
         let window = NSWindow(
@@ -34,7 +34,7 @@ final class TerminalWindowController: NSWindowController, NSWindowDelegate {
             if let pane { self?.closePane(pane) }
         }
         panes.append(pane)
-        pane.start()
+        pane.start(executable: executable, arguments: arguments)
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
@@ -64,7 +64,7 @@ final class TerminalWindowController: NSWindowController, NSWindowDelegate {
 
     /// Splits the active pane in two, the new pane beside it (vertical divider)
     /// or below it (horizontal divider). Nested splits form a tree of split views.
-    private func splitActivePane(vertical: Bool) {
+    func splitActivePane(vertical: Bool, executable: String? = nil) {
         guard let active = activePane else { return }
         let oldView = active.view
 
@@ -91,7 +91,7 @@ final class TerminalWindowController: NSWindowController, NSWindowDelegate {
         }
 
         relayoutSplits()
-        newPane.start()
+        newPane.start(executable: executable)
         window?.makeFirstResponder(newPane.view)
     }
 

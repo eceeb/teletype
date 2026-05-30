@@ -16,8 +16,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// Creates a terminal window. If `existing` is given, the new window is
     /// added as a tab next to it; otherwise it opens standalone.
     @discardableResult
-    func openTerminal(tabbedTo existing: NSWindow? = nil) -> TerminalWindowController {
-        let controller = TerminalWindowController()
+    func openTerminal(tabbedTo existing: NSWindow? = nil, executable: String? = nil) -> TerminalWindowController {
+        let controller = TerminalWindowController(executable: executable)
         controller.onClose = { [weak self] closed in
             self?.controllers.removeAll { $0 === closed }
             self?.mru.removeAll { $0 === closed }
@@ -50,6 +50,45 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc func newTab(_ sender: Any?) {
         openTerminal(tabbedTo: NSApp.keyWindow)
+    }
+
+    /// Cmd-E: open a tab running the Claude CLI.
+    @objc func newClaudeTab(_ sender: Any?) {
+        withClaude { executable in
+            _ = openTerminal(tabbedTo: NSApp.keyWindow, executable: executable)
+        }
+    }
+
+    /// Cmd-Shift-E: open the Claude CLI in a new pane beside the active one.
+    @objc func newClaudePane(_ sender: Any?) {
+        withClaude { claude in
+            controllers.first { $0.window == NSApp.keyWindow }?
+                .splitActivePane(vertical: true, executable: claude)
+        }
+    }
+
+    /// Resolves the Claude CLI and runs `action`, or shows an alert if missing.
+    private func withClaude(_ action: (String) -> Void) {
+        guard let claude = Self.resolveExecutable(named: "claude") else {
+            let alert = NSAlert()
+            alert.messageText = "Claude CLI not found"
+            alert.informativeText = "Couldn't find 'claude' on your PATH. Install Claude Code, then try again."
+            alert.runModal()
+            return
+        }
+        action(claude)
+    }
+
+    /// Finds an executable by searching the inherited PATH.
+    private static func resolveExecutable(named name: String) -> String? {
+        let pathVariable = ProcessInfo.processInfo.environment["PATH"] ?? "/usr/bin:/bin:/usr/local/bin"
+        for directory in pathVariable.split(separator: ":") {
+            let candidate = "\(directory)/\(name)"
+            if FileManager.default.isExecutableFile(atPath: candidate) {
+                return candidate
+            }
+        }
+        return nil
     }
 
     /// Cmd-1 … Cmd-9: select the tab whose index is the sender's tag (0-based).
@@ -112,6 +151,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                                     keyEquivalent: "t")
         newTabItem.target = self
         shellMenu.addItem(newTabItem)
+
+        let claudeTabItem = NSMenuItem(title: "New Claude Tab",
+                                       action: #selector(newClaudeTab(_:)),
+                                       keyEquivalent: "e")
+        claudeTabItem.target = self
+        shellMenu.addItem(claudeTabItem)
+
+        let claudePaneItem = NSMenuItem(title: "New Claude Pane",
+                                        action: #selector(newClaudePane(_:)),
+                                        keyEquivalent: "e")
+        claudePaneItem.keyEquivalentModifierMask = [.command, .shift]
+        claudePaneItem.target = self
+        shellMenu.addItem(claudePaneItem)
 
         shellMenu.addItem(withTitle: "Close Pane",
                           action: #selector(TerminalWindowController.closeActivePane(_:)),
