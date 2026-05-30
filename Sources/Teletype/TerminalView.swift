@@ -21,9 +21,9 @@ final class TerminalView: NSView {
 
     init(emulator: TerminalEmulator) {
         self.emulator = emulator
-        let font = NSFont.monospacedSystemFont(ofSize: 13, weight: .regular)
+        let font = TerminalFont.regular
         self.font = font
-        self.boldFont = NSFont.monospacedSystemFont(ofSize: 13, weight: .bold)
+        self.boldFont = TerminalFont.bold
         self.cellWidth = font.maximumAdvancement.width
         self.cellHeight = ceil(font.ascender - font.descender + font.leading)
         super.init(frame: .zero)
