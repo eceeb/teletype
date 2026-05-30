@@ -34,6 +34,9 @@ final class TerminalView: NSView {
     override var acceptsFirstResponder: Bool { true }
 
     override func keyDown(with event: NSEvent) {
+        // Let ⌘-shortcuts (New Tab, Close, Quit, …) go to the menu instead of
+        // being typed into the shell.
+        guard !event.modifierFlags.contains(.command) else { return }
         guard let characters = event.characters, !characters.isEmpty else { return }
         onInput?(Data(characters.utf8))
     }
