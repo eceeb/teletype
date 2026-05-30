@@ -11,6 +11,8 @@ final class TerminalWindowController: NSWindowController, NSWindowDelegate {
 
     /// Called when this terminal's window closes, so the app can release it.
     var onClose: ((TerminalWindowController) -> Void)?
+    /// Called when this terminal's window becomes key (for MRU tab tracking).
+    var onActivated: ((TerminalWindowController) -> Void)?
 
     init() {
         let session = TerminalSession(columns: 80, rows: 24)
@@ -56,6 +58,10 @@ final class TerminalWindowController: NSWindowController, NSWindowDelegate {
     }
 
     // MARK: - NSWindowDelegate
+
+    func windowDidBecomeKey(_ notification: Notification) {
+        onActivated?(self)
+    }
 
     func windowWillClose(_ notification: Notification) {
         session.terminate()
