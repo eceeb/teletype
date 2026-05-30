@@ -39,6 +39,15 @@ public final class TerminalEmulator {
     /// whether the arrow keys send ESC O x (application) or ESC [ x (normal).
     public var applicationCursorKeys: Bool { terminal.applicationCursor }
 
+    /// The cursor's position in visible-area coordinates (row 0 = top).
+    public var cursorPosition: GridPosition {
+        let location = terminal.getCursorLocation()
+        return GridPosition(row: location.y, column: location.x)
+    }
+
+    /// Whether the cursor should be drawn (program can hide it via DECTCEM).
+    public var cursorVisible: Bool { delegate.cursorVisible }
+
     /// Resizes the grid to the given dimensions (SwiftTerm reflows the buffer).
     public func resize(columns: Int, rows: Int) {
         terminal.resize(cols: columns, rows: rows)
@@ -121,6 +130,9 @@ public final class TerminalEmulator {
     /// Minimal delegate: every callback has a default no-op except `send`,
     /// which the terminal uses to reply to the host (wired up later).
     private final class NoopDelegate: TerminalDelegate {
+        var cursorVisible = true
         func send(source: Terminal, data: ArraySlice<UInt8>) {}
+        func showCursor(source: Terminal) { cursorVisible = true }
+        func hideCursor(source: Terminal) { cursorVisible = false }
     }
 }
