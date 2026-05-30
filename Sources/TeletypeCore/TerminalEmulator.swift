@@ -35,6 +35,11 @@ public final class TerminalEmulator {
     /// Number of columns in the grid.
     public var columns: Int { terminal.cols }
 
+    /// Resizes the grid to the given dimensions (SwiftTerm reflows the buffer).
+    public func resize(columns: Int, rows: Int) {
+        terminal.resize(cols: columns, rows: rows)
+    }
+
     /// The fully-resolved cell at the given position (row 0 / col 0 = top-left
     /// of the visible area): character, colors (inverse applied), width and
     /// styling. Returns nil if out of bounds.

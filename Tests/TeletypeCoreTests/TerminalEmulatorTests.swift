@@ -14,4 +14,11 @@ struct TerminalEmulatorTests {
         #expect(term.columns == 100)
         #expect(term.rows == 30)
     }
+
+    @Test func resizeChangesDimensions() {
+        let term = TerminalEmulator(columns: 80, rows: 24)
+        term.resize(columns: 100, rows: 30)
+        #expect(term.columns == 100)
+        #expect(term.rows == 30)
+    }
 }

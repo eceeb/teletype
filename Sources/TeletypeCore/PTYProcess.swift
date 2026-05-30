@@ -108,6 +108,19 @@ public final class PTYProcess {
         return Data(buffer.prefix(n))
     }
 
+    /// Tells the PTY (and thus the child) the terminal size in characters, so
+    /// full-screen programs lay themselves out correctly.
+    public func setWindowSize(columns: Int, rows: Int) {
+        guard masterFD >= 0 else { return }
+        var size = winsize(ws_row: UInt16(max(0, rows)),
+                           ws_col: UInt16(max(0, columns)),
+                           ws_xpixel: 0,
+                           ws_ypixel: 0)
+        _ = withUnsafeMutablePointer(to: &size) { pointer in
+            ioctl(masterFD, UInt(TIOCSWINSZ), pointer)
+        }
+    }
+
     /// Asks the child to terminate.
     public func terminate() {
         if pid > 0 { kill(pid, SIGTERM) }

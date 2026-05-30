@@ -15,6 +15,9 @@ final class TerminalView: NSView {
 
     /// Called with raw bytes to send to the shell when the user types.
     var onInput: ((Data) -> Void)?
+    /// Called with the (columns, rows) that fit the view whenever that changes.
+    var onResize: ((Int, Int) -> Void)?
+    private var lastGridSize: (cols: Int, rows: Int)?
 
     init(emulator: TerminalEmulator) {
         self.emulator = emulator
@@ -49,6 +52,21 @@ final class TerminalView: NSView {
     @objc func paste(_ sender: Any?) {
         guard let string = NSPasteboard.general.string(forType: .string) else { return }
         onInput?(Data(string.utf8))
+    }
+
+    // MARK: - Layout
+
+    override func setFrameSize(_ newSize: NSSize) {
+        super.setFrameSize(newSize)
+        reportGridSizeIfChanged()
+    }
+
+    private func reportGridSizeIfChanged() {
+        let cols = max(1, Int((bounds.width - 2 * padding) / cellWidth))
+        let rows = max(1, Int((bounds.height - 2 * padding) / cellHeight))
+        guard lastGridSize?.cols != cols || lastGridSize?.rows != rows else { return }
+        lastGridSize = (cols, rows)
+        onResize?(cols, rows)
     }
 
     // MARK: - Drawing
