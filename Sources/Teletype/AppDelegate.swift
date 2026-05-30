@@ -34,7 +34,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             // the user can type in it right away.
             existing.tabGroup?.selectedWindow = newWindow
             newWindow.makeKeyAndOrderFront(nil)
-        } else {
+        } else if let window = controller.window {
+            // Standalone window: restore the saved frame (position + size), or
+            // center on first run. AppKit then keeps it saved across launches.
+            let autosaveName = NSWindow.FrameAutosaveName("TeletypeMainWindow")
+            if !window.setFrameUsingName(autosaveName) {
+                window.center()
+            }
+            window.setFrameAutosaveName(autosaveName)
             controller.showWindow(nil)
         }
         controller.focusTerminal()
