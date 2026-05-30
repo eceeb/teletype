@@ -21,4 +21,10 @@ struct TerminalEmulatorTests {
         #expect(term.columns == 100)
         #expect(term.rows == 30)
     }
+
+    @Test func cursorPositionFollowsText() {
+        let term = TerminalEmulator(columns: 80, rows: 24)
+        term.feed(Data("abc".utf8))
+        #expect(term.cursorPosition == GridPosition(row: 0, column: 3))
+    }
 }

@@ -188,6 +188,30 @@ final class TerminalView: NSView {
                 }
             }
         }
+
+        drawCursor()
+    }
+
+    private func drawCursor() {
+        guard emulator.cursorVisible else { return }
+        let cursor = emulator.cursorPosition
+        guard cursor.row >= 0, cursor.row < emulator.rows,
+              cursor.column >= 0, cursor.column < emulator.columns else { return }
+        let rect = CGRect(
+            x: padding + CGFloat(cursor.column) * cellWidth,
+            y: padding + CGFloat(cursor.row) * cellHeight,
+            width: cellWidth,
+            height: cellHeight
+        )
+        if window?.firstResponder === self {
+            NSColor.white.withAlphaComponent(0.6).setFill()
+            rect.fill()
+        } else {
+            NSColor.white.withAlphaComponent(0.6).setStroke()
+            let path = NSBezierPath(rect: rect.insetBy(dx: 0.5, dy: 0.5))
+            path.lineWidth = 1
+            path.stroke()
+        }
     }
 
     private func nsColor(_ color: TermColor) -> NSColor {
