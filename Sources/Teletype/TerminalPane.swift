@@ -24,15 +24,15 @@ final class TerminalPane {
         view.onResize = { [weak session] cols, rows in session?.resize(columns: cols, rows: rows) }
     }
 
-    /// Starts the user's shell ($SHELL, default zsh) in this pane.
-    func start() {
-        let shell = ProcessInfo.processInfo.environment["SHELL"] ?? "/bin/zsh"
+    /// Starts a command in this pane. Defaults to the user's login shell ($SHELL).
+    func start(executable: String? = nil, arguments: [String] = []) {
+        let program = executable ?? (ProcessInfo.processInfo.environment["SHELL"] ?? "/bin/zsh")
         var environment = ProcessInfo.processInfo.environment
         environment["TERM"] = "xterm-256color"
         do {
-            try session.start(executable: shell, environment: environment)
+            try session.start(executable: program, arguments: arguments, environment: environment)
         } catch {
-            NSLog("teletype: failed to start shell \(shell): \(error)")
+            NSLog("teletype: failed to start \(program): \(error)")
         }
         // Sync the child's window size to the grid the view already fitted.
         session.resize(columns: session.emulator.columns, rows: session.emulator.rows)
