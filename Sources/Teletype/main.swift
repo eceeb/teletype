@@ -2,11 +2,11 @@ import AppKit
 import Foundation
 import TeletypeCore
 
-/// Minimal app shell: one window hosting the terminal view.
-/// (Static text for now — live PTY output is the next step, 3c.)
+/// Minimal app shell: one window hosting a live terminal session.
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var window: NSWindow?
+    private var session: TerminalSession?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         let window = NSWindow(
@@ -18,15 +18,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         window.title = "teletype"
         window.center()
 
-        let emulator = TerminalEmulator(columns: 80, rows: 24)
-        emulator.feed(Data("teletype — step 3b\r\nthe grid is drawn from the emulator\r\n$ ".utf8))
-
-        let terminalView = TerminalView(emulator: emulator)
+        // Live session: the shell's output streams into the grid; redraw on update.
+        let session = TerminalSession(columns: 80, rows: 24)
+        let terminalView = TerminalView(emulator: session.emulator)
+        session.onUpdate = { [weak terminalView] in
+            terminalView?.needsDisplay = true
+        }
+        session.onExit = { NSApp.terminate(nil) }
         window.contentView = terminalView
+
+        // Shell is freely choosable: default to the user's login shell ($SHELL).
+        let shell = ProcessInfo.processInfo.environment["SHELL"] ?? "/bin/zsh"
+        var environment = ProcessInfo.processInfo.environment
+        environment["TERM"] = "xterm-256color"
+        do {
+            try session.start(executable: shell, environment: environment)
+        } catch {
+            NSLog("teletype: failed to start shell \(shell): \(error)")
+        }
+        self.session = session
 
         window.makeKeyAndOrderFront(nil)
         self.window = window
-
         NSApp.activate(ignoringOtherApps: true)
     }
 
