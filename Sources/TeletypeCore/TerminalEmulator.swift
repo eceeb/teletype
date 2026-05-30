@@ -28,6 +28,12 @@ public final class TerminalEmulator {
         terminal.getLine(row: row)?.translateToString(trimRight: true) ?? ""
     }
 
+    /// Number of rows in the grid.
+    public var rows: Int { terminal.rows }
+
+    /// Number of columns in the grid.
+    public var columns: Int { terminal.cols }
+
     /// Minimal delegate: every callback has a default no-op except `send`,
     /// which the terminal uses to reply to the host (wired up later).
     private final class NoopDelegate: TerminalDelegate {
