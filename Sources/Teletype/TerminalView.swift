@@ -20,6 +20,7 @@ final class TerminalView: NSView {
     private var lastGridSize: (cols: Int, rows: Int)?
     private var selectionStart: GridPosition?
     private var selectionEnd: GridPosition?
+    private var scrollAccumulator: CGFloat = 0
 
     init(emulator: TerminalEmulator) {
         self.emulator = emulator
@@ -46,6 +47,10 @@ final class TerminalView: NSView {
         // Let ⌘-shortcuts (New Tab, Close, Quit, …) go to the menu instead of
         // being typed into the shell.
         guard !event.modifierFlags.contains(.command) else { return }
+        if emulator.isScrolledBack {   // typing jumps back to the live view
+            emulator.scrollToBottom()
+            needsDisplay = true
+        }
         if let special = event.specialKey, let sequence = escapeSequence(for: special) {
             onInput?(Data(sequence.utf8))
             return
@@ -111,6 +116,17 @@ final class TerminalView: NSView {
             selectionEnd = nil
             needsDisplay = true
         }
+    }
+
+    // MARK: - Scrolling
+
+    override func scrollWheel(with event: NSEvent) {
+        scrollAccumulator += event.scrollingDeltaY
+        let lines = Int(scrollAccumulator / cellHeight)
+        guard lines != 0 else { return }
+        scrollAccumulator -= CGFloat(lines) * cellHeight
+        emulator.scroll(lines: lines)   // positive = toward older output
+        needsDisplay = true
     }
 
     /// Cmd-C: copy the selected text to the clipboard.
@@ -193,7 +209,7 @@ final class TerminalView: NSView {
     }
 
     private func drawCursor() {
-        guard emulator.cursorVisible else { return }
+        guard emulator.cursorVisible, !emulator.isScrolledBack else { return }
         let cursor = emulator.cursorPosition
         guard cursor.row >= 0, cursor.row < emulator.rows,
               cursor.column >= 0, cursor.column < emulator.columns else { return }
