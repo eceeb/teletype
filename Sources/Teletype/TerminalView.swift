@@ -46,8 +46,30 @@ final class TerminalView: NSView {
         // Let ⌘-shortcuts (New Tab, Close, Quit, …) go to the menu instead of
         // being typed into the shell.
         guard !event.modifierFlags.contains(.command) else { return }
+        if let special = event.specialKey, let sequence = escapeSequence(for: special) {
+            onInput?(Data(sequence.utf8))
+            return
+        }
         guard let characters = event.characters, !characters.isEmpty else { return }
         onInput?(Data(characters.utf8))
+    }
+
+    /// Maps arrow/navigation keys to terminal escape sequences. Returns nil for
+    /// keys (Return, Tab, Backspace, …) that already send the correct character.
+    private func escapeSequence(for key: NSEvent.SpecialKey) -> String? {
+        let app = emulator.applicationCursorKeys
+        switch key {
+        case .upArrow:       return app ? "\u{1b}OA" : "\u{1b}[A"
+        case .downArrow:     return app ? "\u{1b}OB" : "\u{1b}[B"
+        case .rightArrow:    return app ? "\u{1b}OC" : "\u{1b}[C"
+        case .leftArrow:     return app ? "\u{1b}OD" : "\u{1b}[D"
+        case .home:          return "\u{1b}[H"
+        case .end:           return "\u{1b}[F"
+        case .pageUp:        return "\u{1b}[5~"
+        case .pageDown:      return "\u{1b}[6~"
+        case .deleteForward: return "\u{1b}[3~"
+        default:             return nil
+        }
     }
 
     /// Cmd-V: send the clipboard's text to the shell.
