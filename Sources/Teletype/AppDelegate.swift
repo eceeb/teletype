@@ -106,9 +106,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         newTabItem.target = self
         shellMenu.addItem(newTabItem)
 
-        shellMenu.addItem(withTitle: "Close Tab",
-                          action: #selector(NSWindow.performClose(_:)),
+        shellMenu.addItem(withTitle: "Close Pane",
+                          action: #selector(TerminalWindowController.closeActivePane(_:)),
                           keyEquivalent: "w")
+
+        shellMenu.addItem(.separator())
+
+        let splitRightItem = NSMenuItem(title: "Split Right",
+                                        action: #selector(TerminalWindowController.splitRight(_:)),
+                                        keyEquivalent: "d")
+        shellMenu.addItem(splitRightItem)
+        let splitDownItem = NSMenuItem(title: "Split Down",
+                                       action: #selector(TerminalWindowController.splitDown(_:)),
+                                       keyEquivalent: "d")
+        splitDownItem.keyEquivalentModifierMask = [.command, .shift]
+        shellMenu.addItem(splitDownItem)
 
         shellMenu.addItem(.separator())
 

@@ -56,6 +56,12 @@ public final class TerminalSession {
         pty.write(data)
     }
 
+    /// Resizes the grid and informs the child process of the new size.
+    public func resize(columns: Int, rows: Int) {
+        emulator.resize(columns: columns, rows: rows)
+        pty.setWindowSize(columns: columns, rows: rows)
+    }
+
     /// Stops reading and asks the shell to terminate.
     public func terminate() {
         readSource?.cancel()
