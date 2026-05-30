@@ -22,7 +22,8 @@ let package = Package(
         ),
         .executableTarget(
             name: "Teletype",
-            dependencies: ["TeletypeCore"]
+            dependencies: ["TeletypeCore"],
+            resources: [.process("Resources/Fonts")]
         ),
         .testTarget(
             name: "TeletypeCoreTests",
