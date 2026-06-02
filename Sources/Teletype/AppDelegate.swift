@@ -3,73 +3,31 @@ import SwiftUI
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
-    /// Live terminal windows (tabs). Holding them keeps each one alive.
-    private var controllers: [TerminalWindowController] = []
-    /// Tabs in most-recently-used order (front = current). Drives Ctrl-Tab.
-    private var mru: [TerminalWindowController] = []
+    private var mainController: MainWindowController?
     private var settingsWindow: NSWindow?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         setupMainMenu()
-        openTerminal()
+        let controller = MainWindowController()
+        controller.showWindow(nil)
+        mainController = controller
         NSApp.activate(ignoringOtherApps: true)
     }
 
-    /// Creates a terminal window. If `existing` is given, the new window is
-    /// added as a tab next to it; otherwise it opens standalone.
-    @discardableResult
-    func openTerminal(tabbedTo existing: NSWindow? = nil, executable: String? = nil) -> TerminalWindowController {
-        let controller = TerminalWindowController(executable: executable)
-        controller.onClose = { [weak self] closed in
-            self?.controllers.removeAll { $0 === closed }
-            self?.mru.removeAll { $0 === closed }
-        }
-        controller.onActivated = { [weak self] activated in
-            self?.markUsed(activated)
-        }
-        controllers.append(controller)
-        markUsed(controller)
-
-        if let existing, let newWindow = controller.window {
-            existing.addTabbedWindow(newWindow, ordered: .above)
-            // addTabbedWindow only inserts the tab — make it the active one so
-            // the user can type in it right away.
-            existing.tabGroup?.selectedWindow = newWindow
-            newWindow.makeKeyAndOrderFront(nil)
-        } else if let window = controller.window {
-            // Standalone window: restore the saved frame (position + size), or
-            // center on first run. AppKit then keeps it saved across launches.
-            let autosaveName = NSWindow.FrameAutosaveName("TeletypeMainWindow")
-            if !window.setFrameUsingName(autosaveName) {
-                window.center()
-            }
-            window.setFrameAutosaveName(autosaveName)
-            controller.showWindow(nil)
-        }
-        controller.focusTerminal()
-        return controller
+    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
+        true
     }
 
-    @objc func newTab(_ sender: Any?) {
-        openTerminal(tabbedTo: NSApp.keyWindow)
-    }
+    // MARK: - Claude (resolve, then route into the main window)
 
-    /// Cmd-E: open a tab running the Claude CLI.
     @objc func newClaudeTab(_ sender: Any?) {
-        withClaude { executable in
-            _ = openTerminal(tabbedTo: NSApp.keyWindow, executable: executable)
-        }
+        withClaude { mainController?.newTab(executable: $0) }
     }
 
-    /// Cmd-Shift-E: open the Claude CLI in a new pane beside the active one.
     @objc func newClaudePane(_ sender: Any?) {
-        withClaude { claude in
-            controllers.first { $0.window == NSApp.keyWindow }?
-                .splitActivePane(vertical: true, executable: claude)
-        }
+        withClaude { mainController?.splitActivePane(vertical: true, executable: $0) }
     }
 
-    /// Resolves the Claude CLI and runs `action`, or shows an alert if missing.
     private func withClaude(_ action: (String) -> Void) {
         guard let claude = Self.resolveExecutable(named: "claude") else {
             let alert = NSAlert()
@@ -81,66 +39,29 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         action(claude)
     }
 
-    /// Finds an executable by searching the inherited PATH.
     private static func resolveExecutable(named name: String) -> String? {
         let pathVariable = ProcessInfo.processInfo.environment["PATH"] ?? "/usr/bin:/bin:/usr/local/bin"
         for directory in pathVariable.split(separator: ":") {
             let candidate = "\(directory)/\(name)"
-            if FileManager.default.isExecutableFile(atPath: candidate) {
-                return candidate
-            }
+            if FileManager.default.isExecutableFile(atPath: candidate) { return candidate }
         }
         return nil
     }
 
-    /// Cmd-1 … Cmd-9: select the tab whose index is the sender's tag (0-based).
-    @objc func selectTabByNumber(_ sender: NSMenuItem) {
-        guard let group = NSApp.keyWindow?.tabGroup else { return }
-        let windows = group.windows
-        guard windows.indices.contains(sender.tag) else { return }
-        group.selectedWindow = windows[sender.tag]
-        focusController(for: windows[sender.tag])
-    }
+    // MARK: - Settings
 
-    /// Ctrl-Tab: jump back to the tab used right before the current one.
-    @objc func selectLastUsedTab(_ sender: Any?) {
-        guard mru.count >= 2 else { return }
-        let target = mru[1]
-        if let window = target.window {
-            window.tabGroup?.selectedWindow = window
-            window.makeKeyAndOrderFront(nil)
-        }
-        target.focusTerminal()
-    }
-
-    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
-        true
-    }
-
-    /// Cmd-, : open the settings window.
     @objc func openSettings(_ sender: Any?) {
         if settingsWindow == nil {
             let window = NSWindow(contentViewController: NSHostingController(rootView: SettingsView()))
             window.title = "Settings"
             window.styleMask = [.titled, .closable]
             window.isReleasedWhenClosed = false
-            window.setContentSize(NSSize(width: 380, height: 170))
+            window.setContentSize(NSSize(width: 380, height: 220))
             settingsWindow = window
         }
         settingsWindow?.center()
         settingsWindow?.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
-    }
-
-    // MARK: - MRU tracking
-
-    private func markUsed(_ controller: TerminalWindowController) {
-        mru.removeAll { $0 === controller }
-        mru.insert(controller, at: 0)
-    }
-
-    private func focusController(for window: NSWindow) {
-        controllers.first { $0.window === window }?.focusTerminal()
     }
 
     // MARK: - Menu
@@ -159,29 +80,38 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         settingsItem.target = self
         appMenu.addItem(settingsItem)
         appMenu.addItem(.separator())
-
         appMenu.addItem(withTitle: "Quit teletype",
                         action: #selector(NSApplication.terminate(_:)),
                         keyEquivalent: "q")
 
-        // Shell menu
+        // Shell menu (tab/pane actions route via the responder chain to MainWindowController)
         let shellItem = NSMenuItem()
         mainMenu.addItem(shellItem)
         let shellMenu = NSMenu(title: "Shell")
         shellItem.submenu = shellMenu
 
-        let newTabItem = NSMenuItem(title: "New Tab",
-                                    action: #selector(newTab(_:)),
-                                    keyEquivalent: "t")
-        newTabItem.target = self
-        shellMenu.addItem(newTabItem)
-
+        shellMenu.addItem(withTitle: "New Tab",
+                          action: #selector(MainWindowController.newTabAction(_:)),
+                          keyEquivalent: "t")
         let claudeTabItem = NSMenuItem(title: "New Claude Tab",
                                        action: #selector(newClaudeTab(_:)),
                                        keyEquivalent: "e")
         claudeTabItem.target = self
         shellMenu.addItem(claudeTabItem)
+        shellMenu.addItem(withTitle: "Close Pane",
+                          action: #selector(MainWindowController.closeActivePane(_:)),
+                          keyEquivalent: "w")
 
+        shellMenu.addItem(.separator())
+
+        shellMenu.addItem(withTitle: "Split Right",
+                          action: #selector(MainWindowController.splitRight(_:)),
+                          keyEquivalent: "d")
+        let splitDownItem = NSMenuItem(title: "Split Down",
+                                       action: #selector(MainWindowController.splitDown(_:)),
+                                       keyEquivalent: "d")
+        splitDownItem.keyEquivalentModifierMask = [.command, .shift]
+        shellMenu.addItem(splitDownItem)
         let claudePaneItem = NSMenuItem(title: "New Claude Pane",
                                         action: #selector(newClaudePane(_:)),
                                         keyEquivalent: "e")
@@ -189,45 +119,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         claudePaneItem.target = self
         shellMenu.addItem(claudePaneItem)
 
-        shellMenu.addItem(withTitle: "Close Pane",
-                          action: #selector(TerminalWindowController.closeActivePane(_:)),
-                          keyEquivalent: "w")
-
         shellMenu.addItem(.separator())
 
-        let splitRightItem = NSMenuItem(title: "Split Right",
-                                        action: #selector(TerminalWindowController.splitRight(_:)),
-                                        keyEquivalent: "d")
-        shellMenu.addItem(splitRightItem)
-        let splitDownItem = NSMenuItem(title: "Split Down",
-                                       action: #selector(TerminalWindowController.splitDown(_:)),
-                                       keyEquivalent: "d")
-        splitDownItem.keyEquivalentModifierMask = [.command, .shift]
-        shellMenu.addItem(splitDownItem)
-
-        shellMenu.addItem(.separator())
-
-        // Ctrl-Tab → back to the last-used tab.
         let lastUsed = NSMenuItem(title: "Switch to Last Used Tab",
-                                  action: #selector(selectLastUsedTab(_:)),
+                                  action: #selector(MainWindowController.selectLastUsedTab(_:)),
                                   keyEquivalent: "\t")
         lastUsed.keyEquivalentModifierMask = [.control]
-        lastUsed.target = self
         shellMenu.addItem(lastUsed)
 
         shellMenu.addItem(.separator())
 
-        // Cmd-1 … Cmd-9 jump straight to tab N.
         for number in 1...9 {
             let item = NSMenuItem(title: "Go to Tab \(number)",
-                                  action: #selector(selectTabByNumber(_:)),
+                                  action: #selector(MainWindowController.selectTabByNumber(_:)),
                                   keyEquivalent: "\(number)")
             item.tag = number - 1
-            item.target = self
             shellMenu.addItem(item)
         }
 
-        // Edit menu (Paste for now; copy/selection comes with mouse selection)
+        // Edit menu
         let editItem = NSMenuItem()
         mainMenu.addItem(editItem)
         let editMenu = NSMenu(title: "Edit")

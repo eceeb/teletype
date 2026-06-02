@@ -30,6 +30,12 @@ public final class TerminalSettings: @unchecked Sendable {
         set { defaults.set(newValue, forKey: Key.shell) }
     }
 
+    /// Tab bar placement: "top" or "left".
+    public var tabPlacement: String {
+        get { defaults.string(forKey: Key.tabPlacement) ?? "top" }
+        set { defaults.set(newValue, forKey: Key.tabPlacement) }
+    }
+
     private func color(forKey key: String) -> TermColor? {
         guard let rgb = defaults.array(forKey: key) as? [Int], rgb.count == 3 else { return nil }
         return TermColor(red: UInt8(clamping: rgb[0]),
@@ -46,5 +52,6 @@ public final class TerminalSettings: @unchecked Sendable {
         static let background = "backgroundColor"
         static let foreground = "foregroundColor"
         static let shell = "shell"
+        static let tabPlacement = "tabPlacement"
     }
 }
