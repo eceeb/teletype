@@ -7,6 +7,7 @@ struct SettingsView: View {
     @State private var fontSize = AppSettings.store.fontSize
     @State private var background = Color(nsColor: NSColor(AppSettings.store.backgroundColor))
     @State private var shell = AppSettings.store.shell ?? ""
+    @State private var tabsOnLeft = (AppSettings.store.tabPlacement == "left")
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -22,6 +23,15 @@ struct SettingsView: View {
                 Text("Shell")
                 TextField("$SHELL (default)", text: $shell)
             }
+            HStack {
+                Text("Tabs")
+                Picker("", selection: $tabsOnLeft) {
+                    Text("Top").tag(false)
+                    Text("Left").tag(true)
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+            }
         }
         .padding(20)
         .frame(width: 380)
@@ -35,6 +45,10 @@ struct SettingsView: View {
         }
         .onChange(of: shell) { _, value in
             AppSettings.store.shell = value.isEmpty ? nil : value
+            AppSettings.notifyChanged()
+        }
+        .onChange(of: tabsOnLeft) { _, value in
+            AppSettings.store.tabPlacement = value ? "left" : "top"
             AppSettings.notifyChanged()
         }
     }
