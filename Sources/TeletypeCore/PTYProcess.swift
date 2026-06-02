@@ -1,5 +1,6 @@
 import Foundation
 import Darwin
+import CPTY
 
 /// Errors thrown while setting up a pseudo-terminal child process.
 public enum PTYError: Error {
@@ -38,24 +39,8 @@ public final class PTYProcess {
             throw PTYError.openFailed(errno)
         }
 
-        // 2. Wire the child's stdin/stdout/stderr to the slave end,
-        //    and close the raw fds the child shouldn't keep.
-        var actions: posix_spawn_file_actions_t?
-        posix_spawn_file_actions_init(&actions)
-        posix_spawn_file_actions_adddup2(&actions, slave, 0)
-        posix_spawn_file_actions_adddup2(&actions, slave, 1)
-        posix_spawn_file_actions_adddup2(&actions, slave, 2)
-        posix_spawn_file_actions_addclose(&actions, slave)
-        posix_spawn_file_actions_addclose(&actions, master)
-        defer { posix_spawn_file_actions_destroy(&actions) }
-
-        // 3. New session so the PTY can act as the controlling terminal.
-        var attr: posix_spawnattr_t?
-        posix_spawnattr_init(&attr)
-        posix_spawnattr_setflags(&attr, CShort(POSIX_SPAWN_SETSID))
-        defer { posix_spawnattr_destroy(&attr) }
-
-        // 4. Build NULL-terminated argv / envp C arrays.
+        // 2. Build NULL-terminated argv / envp BEFORE forking, so the child does
+        //    no Swift allocation between fork and exec.
         var argv: [UnsafeMutablePointer<CChar>?] = ([executable] + arguments).map { strdup($0) }
         argv.append(nil)
         var envp: [UnsafeMutablePointer<CChar>?] = environment.map { strdup("\($0.key)=\($0.value)") }
@@ -65,17 +50,19 @@ public final class PTYProcess {
             envp.forEach { free($0) }
         }
 
-        // 5. Spawn. posix_spawn copies argv/envp during the call, so freeing
-        //    them afterwards (via defer) is safe.
-        var newPID: pid_t = 0
-        let rc = posix_spawn(&newPID, executable, &actions, &attr, argv, envp)
-        close(slave) // parent keeps only the master end
-        guard rc == 0 else {
+        // 3. Fork + exec via a tiny C helper (fork() is unavailable from Swift):
+        //    it makes the slave the child's controlling terminal (setsid +
+        //    TIOCSCTTY) so Ctrl-C / Ctrl-Z and job control work.
+        let childPID = cpty_spawn(slave, master, argv, envp)
+
+        // 4. Parent keeps only the master end.
+        close(slave)
+        guard childPID > 0 else {
             close(master)
-            throw PTYError.spawnFailed(rc)
+            throw PTYError.spawnFailed(errno)
         }
         masterFD = master
-        pid = newPID
+        pid = childPID
     }
 
     /// Writes input bytes to the child via the master end.
