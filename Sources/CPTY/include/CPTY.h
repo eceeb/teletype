@@ -8,4 +8,8 @@
 /// and job control work. Returns the child PID to the parent, or -1 on failure.
 pid_t cpty_spawn(int slave_fd, int master_fd, char *const argv[], char *const envp[]);
 
+/// Writes process `pid`'s current working directory into `buffer`. Returns 1 on
+/// success, 0 on failure.
+int cpty_cwd(pid_t pid, char *buffer, int size);
+
 #endif /* CPTY_H */

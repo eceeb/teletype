@@ -10,6 +10,26 @@ final class TerminalTab {
 
     /// Called when the tab's last pane has closed, so the owner can drop the tab.
     var onEmpty: (() -> Void)?
+    /// Called when the title or working directory changes (refresh the tab bar).
+    var onTitleChanged: (() -> Void)?
+
+    /// Tab label: the last two path components of the working directory,
+    /// e.g. "mailing-editor/frontend".
+    var title: String {
+        guard let cwd = panes.first?.session.processWorkingDirectory() else { return "Shell" }
+        let components = cwd.split(separator: "/").map(String.init)
+        if components.count >= 2 { return components.suffix(2).joined(separator: "/") }
+        return components.last ?? "Shell"
+    }
+
+    /// Full working directory (home abbreviated to ~), for the row subtitle.
+    var subtitle: String? {
+        guard let cwd = panes.first?.session.processWorkingDirectory() else { return nil }
+        let home = NSHomeDirectory()
+        if cwd == home { return "~" }
+        if cwd.hasPrefix(home + "/") { return "~" + cwd.dropFirst(home.count) }
+        return cwd
+    }
 
     init(executable: String? = nil, arguments: [String] = []) {
         containerView.autoresizingMask = [.width, .height]
@@ -100,6 +120,7 @@ final class TerminalTab {
         pane.onExit = { [weak self, weak pane] in
             if let pane { self?.close(pane: pane) }
         }
+        pane.session.emulator.onTitleChange = { [weak self] in self?.onTitleChanged?() }
         return pane
     }
 

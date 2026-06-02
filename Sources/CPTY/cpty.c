@@ -2,6 +2,9 @@
 
 #include <unistd.h>
 #include <sys/ioctl.h>
+#include <libproc.h>
+#include <sys/proc_info.h>
+#include <string.h>
 
 pid_t cpty_spawn(int slave_fd, int master_fd, char *const argv[], char *const envp[]) {
     pid_t pid = fork();
@@ -20,4 +23,13 @@ pid_t cpty_spawn(int slave_fd, int master_fd, char *const argv[], char *const en
         _exit(127);                     // reached only if exec failed
     }
     return pid;                          // parent: child PID, or -1 on error
+}
+
+int cpty_cwd(pid_t pid, char *buffer, int size) {
+    struct proc_vnodepathinfo info;
+    if (proc_pidinfo(pid, PROC_PIDVNODEPATHINFO, 0, &info, sizeof(info)) <= 0) {
+        return 0;
+    }
+    strlcpy(buffer, info.pvi_cdir.vip_path, (size_t)size);
+    return 1;
 }

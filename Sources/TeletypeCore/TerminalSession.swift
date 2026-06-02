@@ -62,6 +62,11 @@ public final class TerminalSession {
         pty.setWindowSize(columns: columns, rows: rows)
     }
 
+    /// The shell's current working directory (queried from the OS).
+    public func processWorkingDirectory() -> String? {
+        pty.workingDirectory()
+    }
+
     /// Stops reading and asks the shell to terminate.
     public func terminate() {
         readSource?.cancel()
