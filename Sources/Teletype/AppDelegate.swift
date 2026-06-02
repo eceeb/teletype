@@ -1,4 +1,5 @@
 import AppKit
+import SwiftUI
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
@@ -6,6 +7,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var controllers: [TerminalWindowController] = []
     /// Tabs in most-recently-used order (front = current). Drives Ctrl-Tab.
     private var mru: [TerminalWindowController] = []
+    private var settingsWindow: NSWindow?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         setupMainMenu()
@@ -115,6 +117,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         true
     }
 
+    /// Cmd-, : open the settings window.
+    @objc func openSettings(_ sender: Any?) {
+        if settingsWindow == nil {
+            let window = NSWindow(contentViewController: NSHostingController(rootView: SettingsView()))
+            window.title = "Settings"
+            window.styleMask = [.titled, .closable]
+            window.isReleasedWhenClosed = false
+            window.setContentSize(NSSize(width: 380, height: 170))
+            settingsWindow = window
+        }
+        settingsWindow?.center()
+        settingsWindow?.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
+    }
+
     // MARK: - MRU tracking
 
     private func markUsed(_ controller: TerminalWindowController) {
@@ -136,6 +153,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         mainMenu.addItem(appItem)
         let appMenu = NSMenu()
         appItem.submenu = appMenu
+        let settingsItem = NSMenuItem(title: "Settings…",
+                                      action: #selector(openSettings(_:)),
+                                      keyEquivalent: ",")
+        settingsItem.target = self
+        appMenu.addItem(settingsItem)
+        appMenu.addItem(.separator())
+
         appMenu.addItem(withTitle: "Quit teletype",
                         action: #selector(NSApplication.terminate(_:)),
                         keyEquivalent: "q")

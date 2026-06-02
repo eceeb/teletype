@@ -7,11 +7,12 @@ import TeletypeCore
 /// touching the rest of the app.
 final class TerminalView: NSView {
     private let emulator: TerminalEmulator
-    private let font: NSFont
-    private let boldFont: NSFont
-    private let cellWidth: CGFloat
-    private let cellHeight: CGFloat
+    private var font: NSFont
+    private var boldFont: NSFont
+    private var cellWidth: CGFloat
+    private var cellHeight: CGFloat
     private let padding: CGFloat = 4
+    private var backgroundColor: NSColor
 
     /// Called with raw bytes to send to the shell when the user types.
     var onInput: ((Data) -> Void)?
@@ -22,19 +23,35 @@ final class TerminalView: NSView {
     private var selectionEnd: GridPosition?
     private var scrollAccumulator: CGFloat = 0
 
-    init(emulator: TerminalEmulator) {
+    init(emulator: TerminalEmulator, fontSize: CGFloat = 13, background: NSColor = .black) {
         self.emulator = emulator
-        let font = TerminalFont.regular
+        self.backgroundColor = background
+        let font = TerminalFont.regular(ofSize: fontSize)
         self.font = font
-        self.boldFont = TerminalFont.bold
+        self.boldFont = TerminalFont.bold(ofSize: fontSize)
         self.cellWidth = font.maximumAdvancement.width
         self.cellHeight = ceil(font.ascender - font.descender + font.leading)
         super.init(frame: .zero)
         wantsLayer = true
-        layer?.backgroundColor = NSColor.black.cgColor
+        layer?.backgroundColor = background.cgColor
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
+
+    /// Live-applies appearance settings: rebuilds the font at the new size,
+    /// updates the background, and reflows the grid.
+    func applyAppearance(fontSize: CGFloat, background: NSColor) {
+        backgroundColor = background
+        layer?.backgroundColor = background.cgColor
+        let font = TerminalFont.regular(ofSize: fontSize)
+        self.font = font
+        boldFont = TerminalFont.bold(ofSize: fontSize)
+        cellWidth = font.maximumAdvancement.width
+        cellHeight = ceil(font.ascender - font.descender + font.leading)
+        lastGridSize = nil          // force a reflow at the new cell size
+        reportGridSizeIfChanged()
+        needsDisplay = true
+    }
 
     // Draw rows from the top down.
     override var isFlipped: Bool { true }
@@ -170,7 +187,7 @@ final class TerminalView: NSView {
     // MARK: - Drawing
 
     override func draw(_ dirtyRect: NSRect) {
-        NSColor.black.setFill()
+        backgroundColor.setFill()
         bounds.fill()
 
         for row in 0..<emulator.rows {
