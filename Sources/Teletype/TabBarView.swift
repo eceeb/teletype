@@ -6,58 +6,129 @@ enum TabPlacement: String {
     case left
 }
 
-/// A simple tab bar: one button per tab plus a "+" button. Lays its buttons out
-/// horizontally (top placement) or vertically (left placement).
+/// What the tab bar needs to show for one tab.
+struct TabItem {
+    let title: String
+    let subtitle: String?
+}
+
+/// A rich sidebar row (left placement): icon + title + subtitle, highlighted when active.
 @MainActor
-final class TabBarView: NSView {
-    private let stack = NSStackView()
-    var onSelect: ((Int) -> Void)?
-    var onNew: (() -> Void)?
+final class TabRowView: NSView {
+    var onClick: (() -> Void)?
 
-    var placement: TabPlacement = .top {
-        didSet {
-            stack.orientation = (placement == .top) ? .horizontal : .vertical
-            stack.alignment = (placement == .top) ? .centerY : .leading
-        }
-    }
-
-    override init(frame frameRect: NSRect) {
-        super.init(frame: frameRect)
+    init(item: TabItem, isActive: Bool) {
+        super.init(frame: .zero)
         wantsLayer = true
-        layer?.backgroundColor = NSColor.windowBackgroundColor.cgColor
-        stack.orientation = .horizontal
-        stack.spacing = 4
-        stack.alignment = .centerY
-        stack.edgeInsets = NSEdgeInsets(top: 4, left: 6, bottom: 4, right: 6)
-        stack.translatesAutoresizingMaskIntoConstraints = false
-        addSubview(stack)
+        layer?.cornerRadius = 6
+        layer?.backgroundColor = isActive
+            ? NSColor.controlAccentColor.withAlphaComponent(0.85).cgColor
+            : NSColor.clear.cgColor
+
+        let titleLabel = NSTextField(labelWithString: item.title.isEmpty ? "Shell" : item.title)
+        titleLabel.font = .systemFont(ofSize: 12, weight: .medium)
+        titleLabel.textColor = isActive ? .white : .labelColor
+        titleLabel.lineBreakMode = .byTruncatingTail
+        titleLabel.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(titleLabel)
         NSLayoutConstraint.activate([
-            stack.leadingAnchor.constraint(equalTo: leadingAnchor),
-            stack.topAnchor.constraint(equalTo: topAnchor),
-            stack.trailingAnchor.constraint(lessThanOrEqualTo: trailingAnchor),
-            stack.bottomAnchor.constraint(lessThanOrEqualTo: bottomAnchor)
+            titleLabel.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 10),
+            titleLabel.trailingAnchor.constraint(lessThanOrEqualTo: trailingAnchor, constant: -8),
+            titleLabel.centerYAnchor.constraint(equalTo: centerYAnchor)
         ])
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
-    func update(count: Int, active: Int) {
-        stack.arrangedSubviews.forEach { $0.removeFromSuperview() }
-        for index in 0..<count {
-            let button = NSButton(title: "Tab \(index + 1)", target: self, action: #selector(selectTab(_:)))
-            button.tag = index
-            button.bezelStyle = .rounded
-            button.setButtonType(.pushOnPushOff)
-            button.state = (index == active) ? .on : .off
-            stack.addArrangedSubview(button)
-        }
-        let plus = NSButton(title: "+", target: self, action: #selector(addTab(_:)))
-        plus.bezelStyle = .rounded
-        stack.addArrangedSubview(plus)
+    override func mouseDown(with event: NSEvent) { onClick?() }
+}
+
+/// The tab bar: compact buttons across the top, or rich rows down the left.
+@MainActor
+final class TabBarView: NSView {
+    var onSelect: ((Int) -> Void)?
+    var onNew: (() -> Void)?
+
+    var placement: TabPlacement = .top {
+        didSet { rebuild() }
     }
 
-    @objc private func selectTab(_ sender: NSButton) { onSelect?(sender.tag) }
-    @objc private func addTab(_ sender: NSButton) { onNew?() }
+    private var items: [TabItem] = []
+    private var activeIndex = 0
+    private var tabViews: [NSView] = []
+    private let plusButton = NSButton(title: "+", target: nil, action: nil)
+
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        wantsLayer = true
+        layer?.backgroundColor = NSColor.windowBackgroundColor.cgColor
+        plusButton.bezelStyle = .rounded
+        plusButton.target = self
+        plusButton.action = #selector(addTab)
+        addSubview(plusButton)
+    }
+
+    required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
+
+    override var isFlipped: Bool { true }
+
+    func update(_ items: [TabItem], active: Int) {
+        self.items = items
+        self.activeIndex = active
+        rebuild()
+    }
+
+    private func rebuild() {
+        tabViews.forEach { $0.removeFromSuperview() }
+        tabViews = items.enumerated().map { index, item in
+            placement == .top ? makeButton(index, item) : makeRow(index, item)
+        }
+        tabViews.forEach { addSubview($0) }
+        needsLayout = true
+    }
+
+    private func makeButton(_ index: Int, _ item: TabItem) -> NSView {
+        let button = NSButton(title: item.title.isEmpty ? "Shell" : item.title,
+                              target: self, action: #selector(buttonClicked(_:)))
+        button.tag = index
+        button.bezelStyle = .rounded
+        button.setButtonType(.pushOnPushOff)
+        button.state = (index == activeIndex) ? .on : .off
+        return button
+    }
+
+    private func makeRow(_ index: Int, _ item: TabItem) -> NSView {
+        let row = TabRowView(item: item, isActive: index == activeIndex)
+        row.onClick = { [weak self] in self?.onSelect?(index) }
+        return row
+    }
+
+    @objc private func buttonClicked(_ sender: NSButton) { onSelect?(sender.tag) }
+    @objc private func addTab() { onNew?() }
+
+    override func layout() {
+        super.layout()
+        switch placement {
+        case .top:
+            let height: CGFloat = 24
+            let y = (bounds.height - height) / 2
+            var x: CGFloat = 6
+            for view in tabViews {
+                let width = max(64, view.intrinsicContentSize.width + 8)
+                view.frame = NSRect(x: x, y: y, width: width, height: height)
+                x += width + 4
+            }
+            plusButton.frame = NSRect(x: x, y: y, width: 30, height: height)
+        case .left:
+            let rowHeight: CGFloat = 30
+            var y: CGFloat = 6
+            for view in tabViews {
+                view.frame = NSRect(x: 6, y: y, width: bounds.width - 12, height: rowHeight)
+                y += rowHeight + 4
+            }
+            plusButton.frame = NSRect(x: 6, y: y, width: bounds.width - 12, height: 26)
+        }
+    }
 }
 
 /// Lays out the tab bar + content area, switching between top and left placement.
@@ -88,11 +159,11 @@ final class MainContentView: NSView {
         super.layout()
         switch placement {
         case .top:
-            let barHeight: CGFloat = 32
+            let barHeight: CGFloat = 36
             tabBar.frame = NSRect(x: 0, y: 0, width: bounds.width, height: barHeight)
             content.frame = NSRect(x: 0, y: barHeight, width: bounds.width, height: max(0, bounds.height - barHeight))
         case .left:
-            let barWidth: CGFloat = 140
+            let barWidth: CGFloat = 200
             tabBar.frame = NSRect(x: 0, y: 0, width: barWidth, height: bounds.height)
             content.frame = NSRect(x: barWidth, y: 0, width: max(0, bounds.width - barWidth), height: bounds.height)
         }

@@ -11,6 +11,8 @@ final class MainWindowController: NSWindowController, NSWindowDelegate {
     private let tabBar = TabBarView()
     private var rootView: MainContentView!
     private var settingsObserver: NSObjectProtocol?
+    private var titleTimer: Timer?
+    private var lastBarSignature = ""
 
     init() {
         let window = NSWindow(
@@ -41,6 +43,11 @@ final class MainWindowController: NSWindowController, NSWindowDelegate {
             MainActor.assumeIsolated { self?.rootView.placement = self?.placementFromSettings() ?? .top }
         }
 
+        // Poll for working-directory changes so tab titles stay current.
+        titleTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated { self?.refreshTabBar() }
+        }
+
         newTab()
     }
 
@@ -61,6 +68,7 @@ final class MainWindowController: NSWindowController, NSWindowDelegate {
         tab.onEmpty = { [weak self, weak tab] in
             if let tab { self?.removeTab(tab) }
         }
+        tab.onTitleChanged = { [weak self] in self?.refreshTabBar() }
         tabs.append(tab)
         selectTab(at: tabs.count - 1)
     }
@@ -74,7 +82,7 @@ final class MainWindowController: NSWindowController, NSWindowDelegate {
         tab.containerView.autoresizingMask = [.width, .height]
         rootView.content.addSubview(tab.containerView)
         markUsed(tab)
-        tabBar.update(count: tabs.count, active: activeIndex)
+        refreshTabBar()
         if let view = tab.firstPaneView() { window?.makeFirstResponder(view) }
     }
 
@@ -97,6 +105,14 @@ final class MainWindowController: NSWindowController, NSWindowDelegate {
     private func markUsed(_ tab: TerminalTab) {
         mru.removeAll { $0 === tab }
         mru.insert(tab, at: 0)
+    }
+
+    private func refreshTabBar() {
+        let items = tabs.map { TabItem(title: $0.title, subtitle: $0.subtitle) }
+        let signature = "\(activeIndex)#" + items.map { "\($0.title)|\($0.subtitle ?? "")" }.joined(separator: "/")
+        guard signature != lastBarSignature else { return }
+        lastBarSignature = signature
+        tabBar.update(items, active: activeIndex)
     }
 
     // MARK: - Menu actions (reached via the responder chain)
@@ -132,6 +148,7 @@ final class MainWindowController: NSWindowController, NSWindowDelegate {
     // MARK: - NSWindowDelegate
 
     func windowWillClose(_ notification: Notification) {
+        titleTimer?.invalidate()
         tabs.forEach { $0.terminateAll() }
         if let settingsObserver {
             NotificationCenter.default.removeObserver(settingsObserver)

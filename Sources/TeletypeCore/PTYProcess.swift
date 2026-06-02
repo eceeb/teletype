@@ -108,6 +108,15 @@ public final class PTYProcess {
         }
     }
 
+    /// The child process's current working directory, queried from the OS
+    /// (no shell cooperation / OSC needed).
+    public func workingDirectory() -> String? {
+        guard pid > 0 else { return nil }
+        var buffer = [CChar](repeating: 0, count: 1024)
+        guard cpty_cwd(pid, &buffer, Int32(buffer.count)) != 0 else { return nil }
+        return String(cString: buffer)
+    }
+
     /// Asks the child to terminate.
     public func terminate() {
         if pid > 0 { kill(pid, SIGTERM) }
