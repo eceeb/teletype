@@ -14,10 +14,12 @@ let package = Package(
         .package(url: "https://github.com/migueldeicaza/SwiftTerm.git", from: "1.0.0")
     ],
     targets: [
+        .target(name: "CPTY"),
         .target(
             name: "TeletypeCore",
             dependencies: [
-                .product(name: "SwiftTerm", package: "SwiftTerm")
+                .product(name: "SwiftTerm", package: "SwiftTerm"),
+                "CPTY"
             ]
         ),
         .executableTarget(
