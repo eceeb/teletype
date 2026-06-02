@@ -10,7 +10,7 @@ import SwiftTerm
 public final class TerminalEmulator {
     private let terminal: Terminal
     private let delegate: NoopDelegate
-    private let palette = TerminalPalette.standard
+    private var palette = TerminalPalette.standard
     /// The display offset of the live (newest) screen — the bottom scroll bound.
     private var liveBottom = 0
 
@@ -64,6 +64,12 @@ public final class TerminalEmulator {
 
     /// Whether the viewport is scrolled away from the live bottom.
     public var isScrolledBack: Bool { terminal.buffer.yDisp < liveBottom }
+
+    /// Sets the default foreground/background colors (the theme). ANSI-colored
+    /// text keeps its own colors.
+    public func setColors(background: TermColor, foreground: TermColor) {
+        palette = TerminalPalette(defaultForeground: foreground, defaultBackground: background)
+    }
 
     /// Resizes the grid to the given dimensions (SwiftTerm reflows the buffer).
     public func resize(columns: Int, rows: Int) {
