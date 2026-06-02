@@ -52,6 +52,16 @@ public final class TerminalEmulator {
     /// Whether the cursor should be drawn (program can hide it via DECTCEM).
     public var cursorVisible: Bool { delegate.cursorVisible }
 
+    /// The title the program set (OSC 0/2) — often the shell's command or cwd.
+    public var title: String { delegate.title }
+    /// The working directory reported via OSC 7, if any.
+    public var currentDirectory: String? { terminal.hostCurrentDirectory }
+    /// Called when the title or working directory changes.
+    public var onTitleChange: (() -> Void)? {
+        get { delegate.onChange }
+        set { delegate.onChange = newValue }
+    }
+
     /// Scrolls the viewport by `lines` (positive = toward older output).
     public func scroll(lines: Int) {
         terminal.buffer.yDisp = max(0, min(liveBottom, terminal.buffer.yDisp - lines))
@@ -155,9 +165,16 @@ public final class TerminalEmulator {
     private final class NoopDelegate: TerminalDelegate {
         var cursorVisible = true
         var onScrolled: ((Int) -> Void)?
+        var title = ""
+        var onChange: (() -> Void)?
         func send(source: Terminal, data: ArraySlice<UInt8>) {}
         func showCursor(source: Terminal) { cursorVisible = true }
         func hideCursor(source: Terminal) { cursorVisible = false }
         func scrolled(source: Terminal, yDisp: Int) { onScrolled?(yDisp) }
+        func setTerminalTitle(source: Terminal, title: String) {
+            self.title = title
+            onChange?()
+        }
+        func hostCurrentDirectoryUpdated(source: Terminal) { onChange?() }
     }
 }
