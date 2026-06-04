@@ -80,7 +80,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         settingsItem.target = self
         appMenu.addItem(settingsItem)
         appMenu.addItem(.separator())
-        appMenu.addItem(withTitle: "Quit teletype",
+        appMenu.addItem(withTitle: "Quit Teletype",
                         action: #selector(NSApplication.terminate(_:)),
                         keyEquivalent: "q")
 

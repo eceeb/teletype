@@ -23,7 +23,7 @@ final class MainWindowController: NSWindowController, NSWindowDelegate {
             backing: .buffered,
             defer: false
         )
-        window.title = "teletype"
+        window.title = "Teletype"
         super.init(window: window)
         window.delegate = self
 
