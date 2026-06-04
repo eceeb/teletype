@@ -23,7 +23,8 @@ final class MainWindowController: NSWindowController, NSWindowDelegate {
             backing: .buffered,
             defer: false
         )
-        window.title = "Teletype"
+        window.title = ""
+        window.titleVisibility = .hidden   // most apps don't show their name in the title bar
         super.init(window: window)
         window.delegate = self
 
