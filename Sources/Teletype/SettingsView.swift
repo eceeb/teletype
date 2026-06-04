@@ -32,6 +32,10 @@ struct SettingsView: View {
                 .pickerStyle(.segmented)
                 .labelsHidden()
             }
+            Divider()
+            Button("Keyboard Shortcuts…") {
+                NSApp.sendAction(#selector(AppDelegate.openShortcuts(_:)), to: nil, from: nil)
+            }
         }
         .padding(20)
         .frame(width: 380)
