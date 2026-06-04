@@ -2,12 +2,15 @@ import AppKit
 import SwiftUI
 
 @MainActor
-final class AppDelegate: NSObject, NSApplicationDelegate {
+final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var mainController: MainWindowController?
     private var settingsWindow: NSWindow?
     private var shortcutsWindow: NSWindow?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        // Stop macOS from injecting Dictation / Emoji & Symbols into the Edit menu.
+        UserDefaults.standard.set(true, forKey: "NSDisabledDictationMenuItem")
+        UserDefaults.standard.set(true, forKey: "NSDisabledCharacterPaletteMenuItem")
         setupMainMenu()
         let controller = MainWindowController()
         controller.showWindow(nil)
@@ -179,6 +182,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         mainMenu.addItem(editItem)
         let editMenu = NSMenu(title: "Edit")
         editItem.submenu = editMenu
+        editMenu.delegate = self   // prune macOS's auto-added items (see menuNeedsUpdate)
         editMenu.addItem(withTitle: "Copy",
                          action: #selector(NSText.copy(_:)),
                          keyEquivalent: "c")
@@ -187,5 +191,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                          keyEquivalent: "v")
 
         NSApp.mainMenu = mainMenu
+    }
+
+    /// macOS appends AutoFill / Writing Tools / Dictation / Emoji to any "Edit"
+    /// menu; keep only the items we defined (Copy, Paste).
+    func menuNeedsUpdate(_ menu: NSMenu) {
+        let ours: Set<Selector> = [#selector(NSText.copy(_:)), #selector(NSText.paste(_:))]
+        for item in menu.items where !(item.action.map(ours.contains) ?? false) {
+            menu.removeItem(item)
+        }
     }
 }
