@@ -21,6 +21,45 @@ final class TerminalTab {
         pane.start(executable: executable, arguments: arguments)
     }
 
+    /// Rebuilds a saved layout: recreates the split tree and opens each pane's
+    /// shell in its remembered working directory.
+    init(restoring node: PaneNode) {
+        containerView.autoresizingMask = [.width, .height]
+        place(buildView(from: node), asChildOf: containerView)
+        relayout()
+    }
+
+    private func buildView(from node: PaneNode) -> NSView {
+        switch node {
+        case .leaf(let cwd):
+            let pane = makePane()
+            panes.append(pane)
+            pane.start(workingDirectory: cwd)
+            return pane.view
+        case .split(let vertical, let children):
+            let split = NSSplitView()
+            split.isVertical = vertical
+            split.dividerStyle = .thin
+            children.forEach { split.addArrangedSubview(buildView(from: $0)) }
+            return split
+        }
+    }
+
+    /// Captures the current split tree (with each pane's working directory) for saving.
+    func layoutNode() -> PaneNode {
+        guard let root = containerView.subviews.first else { return .leaf(cwd: nil) }
+        return node(for: root)
+    }
+
+    private func node(for view: NSView) -> PaneNode {
+        if let split = view as? NSSplitView {
+            return .split(vertical: split.isVertical,
+                          children: split.arrangedSubviews.map { node(for: $0) })
+        }
+        let pane = panes.first { $0.view == view }
+        return .leaf(cwd: pane?.session.processWorkingDirectory())
+    }
+
     // MARK: - Active pane / focus
 
     func firstPaneView() -> NSView? { panes.first?.view }
@@ -60,7 +99,9 @@ final class TerminalTab {
         }
 
         relayout()
-        newPane.start(executable: executable)
+        // A new split opens in the same directory as the pane it came from.
+        newPane.start(executable: executable,
+                      workingDirectory: active.session.processWorkingDirectory())
         return newPane
     }
 

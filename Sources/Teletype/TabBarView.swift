@@ -10,6 +10,10 @@ enum TabPlacement: String {
 struct TabItem {
     let title: String
     let subtitle: String?
+    /// Which tab this pane belongs to — drives the group background color.
+    let groupIndex: Int
+    /// Shared parent-folder name shown as the group header (nil = no header).
+    let groupLabel: String?
 }
 
 /// A rich sidebar row (left placement): icon + title + subtitle, highlighted when active.
@@ -120,14 +124,59 @@ final class TabBarView: NSView {
             }
             plusButton.frame = NSRect(x: x, y: y, width: 30, height: height)
         case .left:
-            let rowHeight: CGFloat = 30
-            var y: CGFloat = 6
-            for view in tabViews {
-                view.frame = NSRect(x: 6, y: y, width: bounds.width - 12, height: rowHeight)
-                y += rowHeight + 4
+            let rowHeight: CGFloat = 26
+            let headerHeight: CGFloat = 18
+            var y: CGFloat = 8
+            var lastGroup = -1
+            for (index, view) in tabViews.enumerated() {
+                let item = items[index]
+                if item.groupIndex != lastGroup {
+                    if index != 0 { y += 16 }                // gap before a new group
+                    if item.groupLabel != nil { y += headerHeight }
+                    lastGroup = item.groupIndex
+                }
+                view.frame = NSRect(x: 14, y: y, width: bounds.width - 24, height: rowHeight)
+                y += rowHeight + 3
             }
-            plusButton.frame = NSRect(x: 6, y: y, width: bounds.width - 12, height: 26)
+            plusButton.frame = NSRect(x: 8, y: y + 6, width: bounds.width - 16, height: 24)
         }
+        needsDisplay = true
+    }
+
+    /// Draws each group's colored rounded background + its parent-folder header.
+    override func draw(_ dirtyRect: NSRect) {
+        super.draw(dirtyRect)
+        guard placement == .left else { return }
+        var i = 0
+        while i < tabViews.count, i < items.count {
+            let group = items[i].groupIndex
+            let label = items[i].groupLabel
+            var last = i
+            var j = i + 1
+            while j < tabViews.count, j < items.count, items[j].groupIndex == group {
+                last = j
+                j += 1
+            }
+            let headerSpace: CGFloat = label != nil ? 18 : 0
+            let top = tabViews[i].frame.minY - headerSpace - 4
+            let bottom = tabViews[last].frame.maxY + 4
+            let box = NSRect(x: 6, y: top, width: bounds.width - 12, height: bottom - top)
+            groupColor(group).setFill()
+            NSBezierPath(roundedRect: box, xRadius: 8, yRadius: 8).fill()
+            if let label {
+                let attributes: [NSAttributedString.Key: Any] = [
+                    .font: NSFont.systemFont(ofSize: 11, weight: .bold),
+                    .foregroundColor: NSColor.labelColor
+                ]
+                (label as NSString).draw(at: NSPoint(x: 14, y: top + 3), withAttributes: attributes)
+            }
+            i = j
+        }
+    }
+
+    private func groupColor(_ index: Int) -> NSColor {
+        let palette: [NSColor] = [.systemGreen, .systemBlue, .systemOrange, .systemPurple, .systemPink, .systemTeal]
+        return palette[index % palette.count].withAlphaComponent(0.18)
     }
 }
 

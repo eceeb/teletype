@@ -50,7 +50,7 @@ final class MainWindowController: NSWindowController, NSWindowDelegate {
             MainActor.assumeIsolated { self?.refreshTabBar() }
         }
 
-        newTab()
+        restoreSession()
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
@@ -67,12 +67,34 @@ final class MainWindowController: NSWindowController, NSWindowDelegate {
 
     func newTab(executable: String? = nil) {
         let tab = TerminalTab(executable: executable)
+        configure(tab)
+        tabs.append(tab)
+        selectTab(at: tabs.count - 1)
+    }
+
+    private func configure(_ tab: TerminalTab) {
         tab.onEmpty = { [weak self, weak tab] in
             if let tab { self?.removeTab(tab) }
         }
         tab.onTitleChanged = { [weak self] in self?.refreshTabBar() }
-        tabs.append(tab)
-        selectTab(at: tabs.count - 1)
+    }
+
+    /// Recreates the saved session, or opens one fresh tab if there's nothing to restore.
+    private func restoreSession() {
+        guard let layout = SessionPersistence.load(), !layout.tabs.isEmpty else {
+            newTab()
+            return
+        }
+        for node in layout.tabs {
+            let tab = TerminalTab(restoring: node)
+            configure(tab)
+            tabs.append(tab)
+        }
+        selectTab(at: 0)
+    }
+
+    private func saveSession() {
+        SessionPersistence.save(SessionLayout(tabs: tabs.map { $0.layoutNode() }))
     }
 
     func selectTab(at index: Int) {
@@ -116,10 +138,21 @@ final class MainWindowController: NSWindowController, NSWindowDelegate {
     }
 
     private func refreshTabBar() {
-        paneRows = tabs.flatMap { tab in tab.panes.map { (tab: tab, pane: $0) } }
-        let items = paneRows.map { TabItem(title: $0.pane.title, subtitle: nil) }
+        paneRows = []
+        var items: [TabItem] = []
+        for (groupIndex, tab) in tabs.enumerated() {
+            let cwds = tab.panes.map { $0.session.processWorkingDirectory() ?? "" }
+            let summary = PaneGrouping.summarize(cwds)
+            for (offset, pane) in tab.panes.enumerated() {
+                paneRows.append((tab: tab, pane: pane))
+                items.append(TabItem(title: summary.labels[offset],
+                                     subtitle: nil,
+                                     groupIndex: groupIndex,
+                                     groupLabel: summary.header))
+            }
+        }
         let activeRow = activePaneRowIndex()
-        let signature = "\(activeRow)#" + items.map { $0.title }.joined(separator: "/")
+        let signature = "\(activeRow)#" + items.map { "\($0.groupIndex):\($0.groupLabel ?? "")>\($0.title)" }.joined(separator: "|")
         guard signature != lastBarSignature else { return }
         lastBarSignature = signature
         tabBar.update(items, active: activeRow)
@@ -173,9 +206,51 @@ final class MainWindowController: NSWindowController, NSWindowDelegate {
         selectTab(at: sender.tag)
     }
 
+    // MARK: - Pane navigation
+
+    @objc func selectPreviousPane(_ sender: Any?) { cyclePane(by: -1) }
+    @objc func selectNextPane(_ sender: Any?) { cyclePane(by: 1) }
+
+    private func cyclePane(by delta: Int) {
+        guard !paneRows.isEmpty else { return }
+        let next = (activePaneRowIndex() + delta + paneRows.count) % paneRows.count
+        selectPaneRow(next)
+    }
+
+    @objc func focusPaneLeft(_ sender: Any?)  { focusPane(dx: -1, dy: 0) }
+    @objc func focusPaneRight(_ sender: Any?) { focusPane(dx: 1, dy: 0) }
+    @objc func focusPaneUp(_ sender: Any?)    { focusPane(dx: 0, dy: 1) }
+    @objc func focusPaneDown(_ sender: Any?)  { focusPane(dx: 0, dy: -1) }
+
+    /// Focuses the nearest pane in the active tab in the given direction
+    /// (dx/dy in window coordinates, y growing upward).
+    private func focusPane(dx: CGFloat, dy: CGFloat) {
+        guard let tab = activeTab, let active = tab.activePane(for: window?.firstResponder) else { return }
+        let from = active.view.convert(active.view.bounds, to: nil)
+        let origin = CGPoint(x: from.midX, y: from.midY)
+        var best: TerminalPane?
+        var bestDistance = CGFloat.greatestFiniteMagnitude
+        for pane in tab.panes where pane !== active {
+            let frame = pane.view.convert(pane.view.bounds, to: nil)
+            let center = CGPoint(x: frame.midX, y: frame.midY)
+            let along = (center.x - origin.x) * dx + (center.y - origin.y) * dy
+            guard along > 0 else { continue }   // only panes in the requested direction
+            let distance = hypot(center.x - origin.x, center.y - origin.y)
+            if distance < bestDistance {
+                bestDistance = distance
+                best = pane
+            }
+        }
+        if let best {
+            window?.makeFirstResponder(best.view)
+            refreshTabBar()
+        }
+    }
+
     // MARK: - NSWindowDelegate
 
     func windowWillClose(_ notification: Notification) {
+        saveSession()                       // capture cwds before the shells die
         titleTimer?.invalidate()
         tabs.forEach { $0.terminateAll() }
         if let settingsObserver {
