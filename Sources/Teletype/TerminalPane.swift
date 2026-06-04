@@ -14,6 +14,14 @@ final class TerminalPane {
 
     private var settingsObserver: NSObjectProtocol?
 
+    /// Sidebar-row label: the last two components of the working directory,
+    /// e.g. "mailing-editor/frontend".
+    var title: String {
+        guard let cwd = session.processWorkingDirectory() else { return "Shell" }
+        let components = cwd.split(separator: "/").map(String.init)
+        return components.count >= 2 ? components.suffix(2).joined(separator: "/") : (components.last ?? "Shell")
+    }
+
     init() {
         let settings = AppSettings.store
         let session = TerminalSession(columns: 80, rows: 24)
