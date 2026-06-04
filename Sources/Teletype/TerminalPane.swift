@@ -55,9 +55,12 @@ final class TerminalPane {
             ?? "/bin/zsh"
         var environment = ProcessInfo.processInfo.environment
         environment["TERM"] = "xterm-256color"
+        // A fresh shell opens in the user's home dir (like any terminal); when
+        // launched from /Applications the app's own cwd would otherwise be "/".
+        let directory = workingDirectory ?? NSHomeDirectory()
         do {
             try session.start(executable: program, arguments: arguments,
-                              environment: environment, workingDirectory: workingDirectory)
+                              environment: environment, workingDirectory: directory)
         } catch {
             NSLog("teletype: failed to start \(program): \(error)")
         }
