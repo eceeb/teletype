@@ -6,7 +6,7 @@
 #include <sys/proc_info.h>
 #include <string.h>
 
-pid_t cpty_spawn(int slave_fd, int master_fd, char *const argv[], char *const envp[]) {
+pid_t cpty_spawn(int slave_fd, int master_fd, char *const argv[], char *const envp[], const char *cwd) {
     pid_t pid = fork();
     if (pid == 0) {
         // Child: only async-signal-safe calls until exec.
@@ -19,6 +19,9 @@ pid_t cpty_spawn(int slave_fd, int master_fd, char *const argv[], char *const en
             close(slave_fd);
         }
         close(master_fd);
+        if (cwd && cwd[0]) {
+            chdir(cwd);                 // best effort; ignore failure (keeps default)
+        }
         execve(argv[0], argv, envp);
         _exit(127);                     // reached only if exec failed
     }

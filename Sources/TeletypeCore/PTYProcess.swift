@@ -24,7 +24,8 @@ public final class PTYProcess {
     public func start(
         executable: String,
         arguments: [String] = [],
-        environment: [String: String] = ProcessInfo.processInfo.environment
+        environment: [String: String] = ProcessInfo.processInfo.environment,
+        workingDirectory: String? = nil
     ) throws {
         // 1. Open a PTY master/slave pair (pure POSIX — no <util.h> needed).
         let master = posix_openpt(O_RDWR | O_NOCTTY)
@@ -53,7 +54,12 @@ public final class PTYProcess {
         // 3. Fork + exec via a tiny C helper (fork() is unavailable from Swift):
         //    it makes the slave the child's controlling terminal (setsid +
         //    TIOCSCTTY) so Ctrl-C / Ctrl-Z and job control work.
-        let childPID = cpty_spawn(slave, master, argv, envp)
+        let childPID: pid_t
+        if let directory = workingDirectory, !directory.isEmpty {
+            childPID = directory.withCString { cpty_spawn(slave, master, argv, envp, $0) }
+        } else {
+            childPID = cpty_spawn(slave, master, argv, envp, nil)
+        }
 
         // 4. Parent keeps only the master end.
         close(slave)

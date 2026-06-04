@@ -27,9 +27,11 @@ public final class TerminalSession {
     public func start(
         executable: String,
         arguments: [String] = [],
-        environment: [String: String] = ProcessInfo.processInfo.environment
+        environment: [String: String] = ProcessInfo.processInfo.environment,
+        workingDirectory: String? = nil
     ) throws {
-        try pty.start(executable: executable, arguments: arguments, environment: environment)
+        try pty.start(executable: executable, arguments: arguments,
+                      environment: environment, workingDirectory: workingDirectory)
 
         let source = DispatchSource.makeReadSource(fileDescriptor: pty.masterFD, queue: .main)
         source.setEventHandler { [weak self] in
