@@ -13,6 +13,8 @@ final class MainWindowController: NSWindowController, NSWindowDelegate {
     private var settingsObserver: NSObjectProtocol?
     private var titleTimer: Timer?
     private var lastBarSignature = ""
+    /// Flattened (tab, pane) list that the sidebar shows — one row per pane.
+    private var paneRows: [(tab: TerminalTab, pane: TerminalPane)] = []
 
     init() {
         let window = NSWindow(
@@ -29,7 +31,7 @@ final class MainWindowController: NSWindowController, NSWindowDelegate {
         rootView.placement = placementFromSettings()
         window.contentView = rootView
 
-        tabBar.onSelect = { [weak self] index in self?.selectTab(at: index) }
+        tabBar.onSelect = { [weak self] index in self?.selectPaneRow(index) }
         tabBar.onNew = { [weak self] in self?.newTab() }
 
         // Restore saved frame (or center on first run) and keep it saved.
@@ -76,14 +78,20 @@ final class MainWindowController: NSWindowController, NSWindowDelegate {
     func selectTab(at index: Int) {
         guard tabs.indices.contains(index) else { return }
         activeIndex = index
-        let tab = tabs[index]
+        markUsed(tabs[index])
+        showActiveTab()
+        refreshTabBar()
+        if let view = tabs[index].firstPaneView() { window?.makeFirstResponder(view) }
+    }
+
+    /// Makes the content area show the active tab's container, correctly sized.
+    private func showActiveTab() {
+        guard let tab = activeTab else { return }
         rootView.content.subviews.forEach { $0.removeFromSuperview() }
+        rootView.layoutSubtreeIfNeeded()
         tab.containerView.frame = rootView.content.bounds
         tab.containerView.autoresizingMask = [.width, .height]
         rootView.content.addSubview(tab.containerView)
-        markUsed(tab)
-        refreshTabBar()
-        if let view = tab.firstPaneView() { window?.makeFirstResponder(view) }
     }
 
     private func removeTab(_ tab: TerminalTab) {
@@ -108,11 +116,28 @@ final class MainWindowController: NSWindowController, NSWindowDelegate {
     }
 
     private func refreshTabBar() {
-        let items = tabs.map { TabItem(title: $0.title, subtitle: $0.subtitle) }
-        let signature = "\(activeIndex)#" + items.map { "\($0.title)|\($0.subtitle ?? "")" }.joined(separator: "/")
+        paneRows = tabs.flatMap { tab in tab.panes.map { (tab: tab, pane: $0) } }
+        let items = paneRows.map { TabItem(title: $0.pane.title, subtitle: nil) }
+        let activeRow = activePaneRowIndex()
+        let signature = "\(activeRow)#" + items.map { $0.title }.joined(separator: "/")
         guard signature != lastBarSignature else { return }
         lastBarSignature = signature
-        tabBar.update(items, active: activeIndex)
+        tabBar.update(items, active: activeRow)
+    }
+
+    private func activePaneRowIndex() -> Int {
+        guard let tab = activeTab, let active = tab.activePane(for: window?.firstResponder) else { return 0 }
+        return paneRows.firstIndex(where: { $0.pane === active }) ?? 0
+    }
+
+    private func selectPaneRow(_ index: Int) {
+        guard paneRows.indices.contains(index) else { return }
+        let (tab, pane) = paneRows[index]
+        if let tabIndex = tabs.firstIndex(where: { $0 === tab }), tabIndex != activeIndex {
+            selectTab(at: tabIndex)
+        }
+        window?.makeFirstResponder(pane.view)
+        refreshTabBar()
     }
 
     // MARK: - Menu actions (reached via the responder chain)
@@ -122,9 +147,11 @@ final class MainWindowController: NSWindowController, NSWindowDelegate {
     @objc func closeActivePane(_ sender: Any?) {
         guard let tab = activeTab, let active = tab.activePane(for: window?.firstResponder) else { return }
         tab.close(pane: active)   // last pane → tab.onEmpty → removeTab
-        if tabs.contains(where: { $0 === tab }), let view = tab.firstPaneView() {
-            window?.makeFirstResponder(view)
+        if tabs.contains(where: { $0 === tab }) {   // tab survived (had a split)
+            showActiveTab()
+            if let view = tab.firstPaneView() { window?.makeFirstResponder(view) }
         }
+        refreshTabBar()
     }
 
     @objc func splitRight(_ sender: Any?) { splitActivePane(vertical: true) }
@@ -134,6 +161,7 @@ final class MainWindowController: NSWindowController, NSWindowDelegate {
         guard let tab = activeTab, let active = tab.activePane(for: window?.firstResponder) else { return }
         let newPane = tab.split(active, vertical: vertical, executable: executable)
         window?.makeFirstResponder(newPane.view)
+        refreshTabBar()
     }
 
     @objc func selectLastUsedTab(_ sender: Any?) {
