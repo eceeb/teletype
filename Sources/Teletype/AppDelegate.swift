@@ -129,6 +129,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         shellMenu.addItem(.separator())
 
+        // Pane navigation
+        shellMenu.addItem(withTitle: "Previous Pane",
+                          action: #selector(MainWindowController.selectPreviousPane(_:)),
+                          keyEquivalent: "[")
+        shellMenu.addItem(withTitle: "Next Pane",
+                          action: #selector(MainWindowController.selectNextPane(_:)),
+                          keyEquivalent: "]")
+        let directionalPanes: [(String, Selector, Int)] = [
+            ("Focus Pane Left",  #selector(MainWindowController.focusPaneLeft(_:)),  NSLeftArrowFunctionKey),
+            ("Focus Pane Right", #selector(MainWindowController.focusPaneRight(_:)), NSRightArrowFunctionKey),
+            ("Focus Pane Up",    #selector(MainWindowController.focusPaneUp(_:)),    NSUpArrowFunctionKey),
+            ("Focus Pane Down",  #selector(MainWindowController.focusPaneDown(_:)),  NSDownArrowFunctionKey)
+        ]
+        for (title, selector, key) in directionalPanes {
+            let item = NSMenuItem(title: title, action: selector,
+                                  keyEquivalent: String(UnicodeScalar(key)!))
+            item.keyEquivalentModifierMask = [.command, .option]
+            shellMenu.addItem(item)
+        }
+
+        shellMenu.addItem(.separator())
+
         for number in 1...9 {
             let item = NSMenuItem(title: "Go to Tab \(number)",
                                   action: #selector(MainWindowController.selectTabByNumber(_:)),

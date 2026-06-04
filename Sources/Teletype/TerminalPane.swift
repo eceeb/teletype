@@ -47,7 +47,8 @@ final class TerminalPane {
     }
 
     /// Starts a command in this pane. Defaults to the configured shell, then $SHELL.
-    func start(executable: String? = nil, arguments: [String] = []) {
+    /// `workingDirectory` (if set) is where the shell opens — used on session restore.
+    func start(executable: String? = nil, arguments: [String] = [], workingDirectory: String? = nil) {
         let program = executable
             ?? Self.resolvedShell()
             ?? ProcessInfo.processInfo.environment["SHELL"]
@@ -55,7 +56,8 @@ final class TerminalPane {
         var environment = ProcessInfo.processInfo.environment
         environment["TERM"] = "xterm-256color"
         do {
-            try session.start(executable: program, arguments: arguments, environment: environment)
+            try session.start(executable: program, arguments: arguments,
+                              environment: environment, workingDirectory: workingDirectory)
         } catch {
             NSLog("teletype: failed to start \(program): \(error)")
         }
