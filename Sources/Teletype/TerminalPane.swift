@@ -12,6 +12,9 @@ final class TerminalPane {
     /// Called when this pane's shell exits (PTY end-of-file).
     var onExit: (() -> Void)?
 
+    /// Overrides the sidebar row label (e.g. "Claudette" for a Claude pane).
+    var displayName: String?
+
     private var settingsObserver: NSObjectProtocol?
 
     /// Sidebar-row label: the last two components of the working directory,
@@ -53,13 +56,19 @@ final class TerminalPane {
             ?? Self.resolvedShell()
             ?? ProcessInfo.processInfo.environment["SHELL"]
             ?? "/bin/zsh"
+        if (program as NSString).lastPathComponent == "claude" {
+            displayName = "Claudette"
+        }
         var environment = ProcessInfo.processInfo.environment
         environment["TERM"] = "xterm-256color"
+        // Launch the default shell as a *login* shell so it sources ~/.zprofile
+        // (Homebrew PATH, etc.); a GUI app otherwise starts with a minimal PATH.
+        let launchArgs = (executable == nil && arguments.isEmpty) ? ["-l"] : arguments
         // A fresh shell opens in the user's home dir (like any terminal); when
         // launched from /Applications the app's own cwd would otherwise be "/".
         let directory = workingDirectory ?? NSHomeDirectory()
         do {
-            try session.start(executable: program, arguments: arguments,
+            try session.start(executable: program, arguments: launchArgs,
                               environment: environment, workingDirectory: directory)
         } catch {
             NSLog("teletype: failed to start \(program): \(error)")

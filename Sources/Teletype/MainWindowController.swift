@@ -146,7 +146,7 @@ final class MainWindowController: NSWindowController, NSWindowDelegate {
             let summary = PaneGrouping.summarize(cwds)
             for (offset, pane) in tab.panes.enumerated() {
                 paneRows.append((tab: tab, pane: pane))
-                items.append(TabItem(title: summary.labels[offset],
+                items.append(TabItem(title: pane.displayName ?? summary.labels[offset],
                                      subtitle: nil,
                                      groupIndex: groupIndex,
                                      groupLabel: summary.header))
