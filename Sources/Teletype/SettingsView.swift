@@ -6,6 +6,7 @@ import TeletypeCore
 struct SettingsView: View {
     @State private var fontSize = AppSettings.store.fontSize
     @State private var background = Color(nsColor: NSColor(AppSettings.store.backgroundColor))
+    @State private var foreground = Color(nsColor: NSColor(AppSettings.store.foregroundColor))
     @State private var shell = AppSettings.store.shell ?? ""
     @State private var tabsOnLeft = (AppSettings.store.tabPlacement == "left")
 
@@ -19,6 +20,7 @@ struct SettingsView: View {
                     .frame(width: 44, alignment: .trailing)
             }
             ColorPicker("Background", selection: $background, supportsOpacity: false)
+            ColorPicker("Text", selection: $foreground, supportsOpacity: false)
             HStack {
                 Text("Shell")
                 TextField("$SHELL (default)", text: $shell)
@@ -45,6 +47,10 @@ struct SettingsView: View {
         }
         .onChange(of: background) { _, value in
             AppSettings.store.backgroundColor = TermColor(NSColor(value))
+            AppSettings.notifyChanged()
+        }
+        .onChange(of: foreground) { _, value in
+            AppSettings.store.foregroundColor = TermColor(NSColor(value))
             AppSettings.notifyChanged()
         }
         .onChange(of: shell) { _, value in
