@@ -15,6 +15,7 @@ mkdir -p "$STAGE/Contents/MacOS" "$STAGE/Contents/Resources"
 cp .build/release/Teletype "$STAGE/Contents/MacOS/Teletype"
 cp -R .build/release/*.bundle "$STAGE/Contents/Resources/"
 cp packaging/Info.plist "$STAGE/Contents/Info.plist"
+cp packaging/AppIcon.icns "$STAGE/Contents/Resources/AppIcon.icns"
 printf 'APPL????' > "$STAGE/Contents/PkgInfo"
 
 # Install to /Applications, falling back to ~/Applications if not writable.
