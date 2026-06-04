@@ -5,6 +5,7 @@ import SwiftUI
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var mainController: MainWindowController?
     private var settingsWindow: NSWindow?
+    private var shortcutsWindow: NSWindow?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         setupMainMenu()
@@ -61,6 +62,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         settingsWindow?.center()
         settingsWindow?.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
+    }
+
+    @objc func openShortcuts(_ sender: Any?) {
+        if shortcutsWindow == nil {
+            let window = NSWindow(contentViewController: NSHostingController(rootView: ShortcutsView()))
+            window.title = "Keyboard Shortcuts"
+            window.styleMask = [.titled, .closable]
+            window.isReleasedWhenClosed = false
+            window.setContentSize(NSSize(width: 420, height: 520))
+            shortcutsWindow = window
+        }
+        shortcutsWindow?.center()
+        shortcutsWindow?.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
     }
 
