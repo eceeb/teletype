@@ -21,6 +21,9 @@ public final class TerminalSession {
 
     public init(columns: Int = 80, rows: Int = 24) {
         emulator = TerminalEmulator(columns: columns, rows: rows)
+        // Terminal replies (cursor-position reports, device attributes, …) are
+        // sent back to the program as input — curses apps need these answers.
+        emulator.onRespond = { [weak self] data in self?.write(data) }
     }
 
     /// Starts the shell and begins streaming its output into the grid.
@@ -67,6 +70,11 @@ public final class TerminalSession {
     /// The shell's current working directory (queried from the OS).
     public func processWorkingDirectory() -> String? {
         pty.workingDirectory()
+    }
+
+    /// The foreground command running on the PTY (nil when it's just the shell).
+    public func foregroundProcessName() -> String? {
+        pty.foregroundProcessName()
     }
 
     /// Stops reading and asks the shell to terminate.

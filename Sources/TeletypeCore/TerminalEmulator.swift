@@ -13,6 +13,9 @@ public final class TerminalEmulator {
     private var palette = TerminalPalette.standard
     /// The display offset of the live (newest) screen — the bottom scroll bound.
     private var liveBottom = 0
+    /// The command the shell reported via our OSC 7771 hook (the literal typed
+    /// line, e.g. "öUpdateBrew"); nil at the prompt. Needs the .zshrc hook.
+    public private(set) var shellCommand: String?
 
     public init(columns: Int = 80, rows: Int = 24) {
         delegate = NoopDelegate()
@@ -20,6 +23,14 @@ public final class TerminalEmulator {
         terminal.resize(cols: columns, rows: rows)
         // Track the live bottom: SwiftTerm reports it whenever output scrolls.
         delegate.onScrolled = { [weak self] yDisp in self?.liveBottom = yDisp }
+        // Our shell hook (.zshrc) reports the typed command via OSC 7771.
+        terminal.registerOscHandler(code: 7771) { [weak self] data in
+            let text = String(decoding: data, as: UTF8.self)
+            self?.shellCommand = text.isEmpty ? nil : text
+            self?.delegate.onChange?()
+        }
+        // Forward terminal→program replies to the PTY.
+        delegate.onSend = { [weak self] data in self?.onRespond?(Data(data)) }
     }
 
     /// Feeds raw output bytes into the parser, updating the grid.
@@ -61,6 +72,10 @@ public final class TerminalEmulator {
         get { delegate.onChange }
         set { delegate.onChange = newValue }
     }
+    /// Called when the terminal must reply to the program (cursor-position
+    /// report, device attributes, …). The reply is written to the PTY as input —
+    /// curses / full-screen apps rely on these answers to render correctly.
+    public var onRespond: ((Data) -> Void)?
 
     /// Scrolls the viewport by `lines` (positive = toward older output).
     public func scroll(lines: Int) {
@@ -167,7 +182,8 @@ public final class TerminalEmulator {
         var onScrolled: ((Int) -> Void)?
         var title = ""
         var onChange: (() -> Void)?
-        func send(source: Terminal, data: ArraySlice<UInt8>) {}
+        var onSend: ((ArraySlice<UInt8>) -> Void)?
+        func send(source: Terminal, data: ArraySlice<UInt8>) { onSend?(data) }
         func showCursor(source: Terminal) { cursorVisible = true }
         func hideCursor(source: Terminal) { cursorVisible = false }
         func scrolled(source: Terminal, yDisp: Int) { onScrolled?(yDisp) }
