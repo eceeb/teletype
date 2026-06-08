@@ -37,9 +37,26 @@ final class TabRowView: NSView {
         addSubview(titleLabel)
         NSLayoutConstraint.activate([
             titleLabel.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 10),
-            titleLabel.trailingAnchor.constraint(lessThanOrEqualTo: trailingAnchor, constant: -8),
-            titleLabel.centerYAnchor.constraint(equalTo: centerYAnchor)
+            titleLabel.trailingAnchor.constraint(lessThanOrEqualTo: trailingAnchor, constant: -8)
         ])
+
+        if let subtitle = item.subtitle, !subtitle.isEmpty {
+            // A command is running: title near the top, process name underneath.
+            titleLabel.topAnchor.constraint(equalTo: topAnchor, constant: 5).isActive = true
+            let subtitleLabel = NSTextField(labelWithString: subtitle)
+            subtitleLabel.font = .systemFont(ofSize: 10, weight: .regular)
+            subtitleLabel.textColor = isActive ? NSColor.white.withAlphaComponent(0.8) : .secondaryLabelColor
+            subtitleLabel.lineBreakMode = .byTruncatingTail
+            subtitleLabel.translatesAutoresizingMaskIntoConstraints = false
+            addSubview(subtitleLabel)
+            NSLayoutConstraint.activate([
+                subtitleLabel.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 10),
+                subtitleLabel.trailingAnchor.constraint(lessThanOrEqualTo: trailingAnchor, constant: -8),
+                subtitleLabel.topAnchor.constraint(equalTo: titleLabel.bottomAnchor, constant: 1)
+            ])
+        } else {
+            titleLabel.centerYAnchor.constraint(equalTo: centerYAnchor).isActive = true
+        }
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
@@ -124,7 +141,8 @@ final class TabBarView: NSView {
             }
             plusButton.frame = NSRect(x: x, y: y, width: 30, height: height)
         case .left:
-            let rowHeight: CGFloat = 26
+            let baseHeight: CGFloat = 26
+            let tallHeight: CGFloat = 42         // taller when a process subtitle shows
             let headerHeight: CGFloat = 18
             var y: CGFloat = 8
             var lastGroup = -1
@@ -135,6 +153,7 @@ final class TabBarView: NSView {
                     if item.groupLabel != nil { y += headerHeight }
                     lastGroup = item.groupIndex
                 }
+                let rowHeight = (item.subtitle?.isEmpty == false) ? tallHeight : baseHeight
                 view.frame = NSRect(x: 14, y: y, width: bounds.width - 24, height: rowHeight)
                 y += rowHeight + 3
             }

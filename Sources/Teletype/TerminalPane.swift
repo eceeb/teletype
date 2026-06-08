@@ -25,6 +25,14 @@ final class TerminalPane {
         return components.count >= 2 ? components.suffix(2).joined(separator: "/") : (components.last ?? "Shell")
     }
 
+    /// The running foreground command, shown under the path (nil when idle).
+    /// Prefers the literal typed command from the shell hook (OSC 7771, e.g.
+    /// "öUpdateBrew") and falls back to the OS process/script name.
+    var runningProcess: String? {
+        if let command = session.emulator.shellCommand, !command.isEmpty { return command }
+        return session.foregroundProcessName()
+    }
+
     init() {
         let settings = AppSettings.store
         let session = TerminalSession(columns: 80, rows: 24)
@@ -61,6 +69,7 @@ final class TerminalPane {
         }
         var environment = ProcessInfo.processInfo.environment
         environment["TERM"] = "xterm-256color"
+        environment["TERM_PROGRAM"] = "Teletype"   // lets the .zshrc hook fire only here
         // Launch the default shell as a *login* shell so it sources ~/.zprofile
         // (Homebrew PATH, etc.); a GUI app otherwise starts with a minimal PATH.
         let launchArgs = (executable == nil && arguments.isEmpty) ? ["-l"] : arguments

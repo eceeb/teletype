@@ -29,7 +29,7 @@ final class TerminalView: NSView {
         let font = TerminalFont.regular(ofSize: fontSize)
         self.font = font
         self.boldFont = TerminalFont.bold(ofSize: fontSize)
-        self.cellWidth = font.maximumAdvancement.width
+        self.cellWidth = TerminalView.advance(of: font)
         self.cellHeight = ceil(font.ascender - font.descender + font.leading)
         super.init(frame: .zero)
         wantsLayer = true
@@ -46,7 +46,7 @@ final class TerminalView: NSView {
         let font = TerminalFont.regular(ofSize: fontSize)
         self.font = font
         boldFont = TerminalFont.bold(ofSize: fontSize)
-        cellWidth = font.maximumAdvancement.width
+        cellWidth = TerminalView.advance(of: font)
         cellHeight = ceil(font.ascender - font.descender + font.leading)
         lastGridSize = nil          // force a reflow at the new cell size
         reportGridSizeIfChanged()
@@ -191,15 +191,17 @@ final class TerminalView: NSView {
         bounds.fill()
 
         for row in 0..<emulator.rows {
+            // Round cell edges to whole pixels so adjacent backgrounds tile
+            // seamlessly — a fractional cellWidth/Height otherwise leaves thin
+            // gridlines between cells (very visible on a full-screen background).
+            let y0 = (padding + CGFloat(row) * cellHeight).rounded()
+            let y1 = (padding + CGFloat(row + 1) * cellHeight).rounded()
             for col in 0..<emulator.columns {
                 guard let cell = emulator.cell(row: row, col: col) else { continue }
                 let span = cell.width == 2 ? 2 : 1
-                let rect = CGRect(
-                    x: padding + CGFloat(col) * cellWidth,
-                    y: padding + CGFloat(row) * cellHeight,
-                    width: cellWidth * CGFloat(span),
-                    height: cellHeight
-                )
+                let x0 = (padding + CGFloat(col) * cellWidth).rounded()
+                let x1 = (padding + CGFloat(col + span) * cellWidth).rounded()
+                let rect = CGRect(x: x0, y: y0, width: x1 - x0, height: y1 - y0)
 
                 nsColor(cell.background).setFill()
                 rect.fill()
@@ -213,7 +215,7 @@ final class TerminalView: NSView {
                 if cell.width > 0, cell.character != " " {
                     var attributes: [NSAttributedString.Key: Any] = [
                         .font: cell.bold ? boldFont : font,
-                        .foregroundColor: nsColor(cell.foreground)
+                        .foregroundColor: nsColor(legibleForeground(cell.foreground, on: cell.background))
                     ]
                     if cell.italic { attributes[.obliqueness] = 0.2 }
                     if cell.underline { attributes[.underlineStyle] = NSUnderlineStyle.single.rawValue }
@@ -245,6 +247,33 @@ final class TerminalView: NSView {
             path.lineWidth = 1
             path.stroke()
         }
+    }
+
+    /// One monospace cell's advance, in whole pixels. Measured from a real glyph
+    /// ("0") rather than `maximumAdvancement`, which a Nerd Font inflates with its
+    /// wide icon glyphs (that made every cell too wide). Rounding to an integer
+    /// keeps columns evenly spaced and lets cell backgrounds tile without seams.
+    private static func advance(of font: NSFont) -> CGFloat {
+        let width = ("0" as NSString).size(withAttributes: [.font: font]).width
+        return max(1, width.rounded())
+    }
+
+    /// Keeps glyphs legible when a program draws the foreground in (nearly) the
+    /// background color. asciiquarium's castle, for example, is BLACK on a black
+    /// background and relies on terminals showing it as a faint gray. Only nudges
+    /// when the two are almost identical, so normal colors stay untouched.
+    private func legibleForeground(_ fg: TermColor, on bg: TermColor) -> TermColor {
+        let dr = Int(fg.red) - Int(bg.red)
+        let dg = Int(fg.green) - Int(bg.green)
+        let db = Int(fg.blue) - Int(bg.blue)
+        guard dr * dr + dg * dg + db * db < 30 * 30 else { return fg }
+        let bgLuminance = 0.299 * Double(bg.red) + 0.587 * Double(bg.green) + 0.114 * Double(bg.blue)
+        let shift = 78
+        func nudge(_ value: UInt8) -> UInt8 {
+            bgLuminance < 128 ? UInt8(min(255, Int(value) + shift))
+                              : UInt8(max(0, Int(value) - shift))
+        }
+        return TermColor(red: nudge(bg.red), green: nudge(bg.green), blue: nudge(bg.blue))
     }
 
     private func nsColor(_ color: TermColor) -> NSColor {
