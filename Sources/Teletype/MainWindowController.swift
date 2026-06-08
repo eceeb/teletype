@@ -147,13 +147,13 @@ final class MainWindowController: NSWindowController, NSWindowDelegate {
             for (offset, pane) in tab.panes.enumerated() {
                 paneRows.append((tab: tab, pane: pane))
                 items.append(TabItem(title: pane.displayName ?? summary.labels[offset],
-                                     subtitle: nil,
+                                     subtitle: pane.runningProcess,
                                      groupIndex: groupIndex,
                                      groupLabel: summary.header))
             }
         }
         let activeRow = activePaneRowIndex()
-        let signature = "\(activeRow)#" + items.map { "\($0.groupIndex):\($0.groupLabel ?? "")>\($0.title)" }.joined(separator: "|")
+        let signature = "\(activeRow)#" + items.map { "\($0.groupIndex):\($0.groupLabel ?? "")>\($0.title)~\($0.subtitle ?? "")" }.joined(separator: "|")
         guard signature != lastBarSignature else { return }
         lastBarSignature = signature
         tabBar.update(items, active: activeRow)

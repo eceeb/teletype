@@ -13,4 +13,9 @@ pid_t cpty_spawn(int slave_fd, int master_fd, char *const argv[], char *const en
 /// success, 0 on failure.
 int cpty_cwd(pid_t pid, char *buffer, int size);
 
+/// Writes the name of the terminal's foreground process group leader (the
+/// running command) into `buffer`. Returns 0 if that's just the shell
+/// (pgid == shell_pid) or on failure; 1 on success.
+int cpty_foreground_name(int master_fd, pid_t shell_pid, char *buffer, int size);
+
 #endif /* CPTY_H */

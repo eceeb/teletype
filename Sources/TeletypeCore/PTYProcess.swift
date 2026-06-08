@@ -123,6 +123,16 @@ public final class PTYProcess {
         return String(cString: buffer)
     }
 
+    /// The foreground command running on the terminal (e.g. "vim", "brew"),
+    /// or nil when the shell itself is in the foreground.
+    public func foregroundProcessName() -> String? {
+        guard masterFD >= 0, pid > 0 else { return nil }
+        var buffer = [CChar](repeating: 0, count: 256)
+        guard cpty_foreground_name(masterFD, pid, &buffer, Int32(buffer.count)) != 0 else { return nil }
+        let name = String(cString: buffer)
+        return name.isEmpty ? nil : name
+    }
+
     /// Asks the child to terminate.
     public func terminate() {
         if pid > 0 { kill(pid, SIGTERM) }
