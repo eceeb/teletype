@@ -36,6 +36,12 @@ public final class TerminalSettings: @unchecked Sendable {
         set { defaults.set(newValue, forKey: Key.tabPlacement) }
     }
 
+    /// Directory new tabs open in (tilde allowed); nil/empty → the user's home.
+    public var newTabDirectory: String? {
+        get { defaults.string(forKey: Key.newTabDirectory) }
+        set { defaults.set(newValue, forKey: Key.newTabDirectory) }
+    }
+
     private func color(forKey key: String) -> TermColor? {
         guard let rgb = defaults.array(forKey: key) as? [Int], rgb.count == 3 else { return nil }
         return TermColor(red: UInt8(clamping: rgb[0]),
@@ -53,5 +59,6 @@ public final class TerminalSettings: @unchecked Sendable {
         static let foreground = "foregroundColor"
         static let shell = "shell"
         static let tabPlacement = "tabPlacement"
+        static let newTabDirectory = "newTabDirectory"
     }
 }
