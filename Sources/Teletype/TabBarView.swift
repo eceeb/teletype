@@ -25,8 +25,10 @@ final class TabRowView: NSView {
         super.init(frame: .zero)
         wantsLayer = true
         layer?.cornerRadius = 6
+        // Muted dark green: OLED-friendly (dark, low-saturation), strong contrast
+        // against the light sidebar, and a nod to the app icon. Not bright blue.
         layer?.backgroundColor = isActive
-            ? NSColor.controlAccentColor.withAlphaComponent(0.85).cgColor
+            ? NSColor(srgbRed: 0.10, green: 0.42, blue: 0.30, alpha: 1).cgColor
             : NSColor.clear.cgColor
 
         let titleLabel = NSTextField(labelWithString: item.title.isEmpty ? "Shell" : item.title)
@@ -194,8 +196,16 @@ final class TabBarView: NSView {
     }
 
     private func groupColor(_ index: Int) -> NSColor {
-        let palette: [NSColor] = [.systemGreen, .systemBlue, .systemOrange, .systemPurple, .systemPink, .systemTeal]
-        return palette[index % palette.count].withAlphaComponent(0.18)
+        // Muted, OLED-friendly tints (no bright blue); subtle on the sidebar.
+        let palette: [NSColor] = [
+            NSColor(srgbRed: 0.10, green: 0.42, blue: 0.30, alpha: 1),  // dark green (matches the active tab)
+            NSColor(srgbRed: 0.16, green: 0.40, blue: 0.44, alpha: 1),  // muted teal
+            NSColor(srgbRed: 0.52, green: 0.38, blue: 0.18, alpha: 1),  // muted amber
+            NSColor(srgbRed: 0.40, green: 0.30, blue: 0.52, alpha: 1),  // muted plum
+            NSColor(srgbRed: 0.52, green: 0.30, blue: 0.36, alpha: 1),  // muted rose
+            NSColor(srgbRed: 0.34, green: 0.40, blue: 0.26, alpha: 1)   // muted olive
+        ]
+        return palette[index % palette.count].withAlphaComponent(0.20)
     }
 }
 

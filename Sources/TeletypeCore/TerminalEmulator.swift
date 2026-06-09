@@ -13,9 +13,6 @@ public final class TerminalEmulator {
     private var palette = TerminalPalette.standard
     /// The display offset of the live (newest) screen — the bottom scroll bound.
     private var liveBottom = 0
-    /// The command the shell reported via our OSC 7771 hook (the literal typed
-    /// line, e.g. "öUpdateBrew"); nil at the prompt. Needs the .zshrc hook.
-    public private(set) var shellCommand: String?
 
     public init(columns: Int = 80, rows: Int = 24) {
         delegate = NoopDelegate()
@@ -23,12 +20,6 @@ public final class TerminalEmulator {
         terminal.resize(cols: columns, rows: rows)
         // Track the live bottom: SwiftTerm reports it whenever output scrolls.
         delegate.onScrolled = { [weak self] yDisp in self?.liveBottom = yDisp }
-        // Our shell hook (.zshrc) reports the typed command via OSC 7771.
-        terminal.registerOscHandler(code: 7771) { [weak self] data in
-            let text = String(decoding: data, as: UTF8.self)
-            self?.shellCommand = text.isEmpty ? nil : text
-            self?.delegate.onChange?()
-        }
         // Forward terminal→program replies to the PTY.
         delegate.onSend = { [weak self] data in self?.onRespond?(Data(data)) }
     }
