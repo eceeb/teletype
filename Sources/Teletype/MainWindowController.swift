@@ -67,10 +67,24 @@ final class MainWindowController: NSWindowController, NSWindowDelegate {
     // MARK: - Tabs
 
     func newTab(executable: String? = nil) {
-        let tab = TerminalTab(executable: executable)
+        let tab = TerminalTab(executable: executable, workingDirectory: Self.newTabDirectory())
         configure(tab)
         tabs.append(tab)
         selectTab(at: tabs.count - 1)
+    }
+
+    /// Where new tabs open: the configured folder (tilde-expanded), else home.
+    /// (Splits inherit the active pane's directory instead — see TerminalTab.split.)
+    private static func newTabDirectory() -> String {
+        let configured = AppSettings.store.newTabDirectory ?? ""
+        let expanded = (configured as NSString).expandingTildeInPath
+        var isDirectory: ObjCBool = false
+        if !configured.isEmpty,
+           FileManager.default.fileExists(atPath: expanded, isDirectory: &isDirectory),
+           isDirectory.boolValue {
+            return expanded
+        }
+        return NSHomeDirectory()
     }
 
     private func configure(_ tab: TerminalTab) {

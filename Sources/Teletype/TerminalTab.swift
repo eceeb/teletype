@@ -13,12 +13,12 @@ final class TerminalTab {
     /// Called when a pane's title or working directory changes (refresh the bar).
     var onTitleChanged: (() -> Void)?
 
-    init(executable: String? = nil, arguments: [String] = []) {
+    init(executable: String? = nil, arguments: [String] = [], workingDirectory: String? = nil) {
         containerView.autoresizingMask = [.width, .height]
         let pane = makePane()
         place(pane.view, asChildOf: containerView)
         panes.append(pane)
-        pane.start(executable: executable, arguments: arguments)
+        pane.start(executable: executable, arguments: arguments, workingDirectory: workingDirectory)
     }
 
     /// Rebuilds a saved layout: recreates the split tree and opens each pane's

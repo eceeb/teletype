@@ -8,6 +8,7 @@ struct SettingsView: View {
     @State private var background = Color(nsColor: NSColor(AppSettings.store.backgroundColor))
     @State private var foreground = Color(nsColor: NSColor(AppSettings.store.foregroundColor))
     @State private var shell = AppSettings.store.shell ?? ""
+    @State private var newTabDir = AppSettings.store.newTabDirectory ?? ""
     @State private var tabsOnLeft = (AppSettings.store.tabPlacement == "left")
 
     var body: some View {
@@ -24,6 +25,10 @@ struct SettingsView: View {
             HStack {
                 Text("Shell")
                 TextField("$SHELL (default)", text: $shell)
+            }
+            HStack {
+                Text("New-tab folder")
+                TextField("~ (home)", text: $newTabDir)
             }
             HStack {
                 Text("Tabs")
@@ -55,6 +60,10 @@ struct SettingsView: View {
         }
         .onChange(of: shell) { _, value in
             AppSettings.store.shell = value.isEmpty ? nil : value
+            AppSettings.notifyChanged()
+        }
+        .onChange(of: newTabDir) { _, value in
+            AppSettings.store.newTabDirectory = value.isEmpty ? nil : value
             AppSettings.notifyChanged()
         }
         .onChange(of: tabsOnLeft) { _, value in

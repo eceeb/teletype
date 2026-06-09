@@ -17,6 +17,10 @@ final class TerminalPane {
 
     private var settingsObserver: NSObjectProtocol?
 
+    // The command captured from zsh history when the current foreground process started.
+    private var capturedCommand: String?
+    private var commandWasRunning = false
+
     /// Sidebar-row label: the last two components of the working directory,
     /// e.g. "mailing-editor/frontend".
     var title: String {
@@ -26,11 +30,37 @@ final class TerminalPane {
     }
 
     /// The running foreground command, shown under the path (nil when idle).
-    /// Prefers the literal typed command from the shell hook (OSC 7771, e.g.
-    /// "öUpdateBrew") and falls back to the OS process/script name.
+    /// When a command starts we read the line zsh just appended to its history
+    /// (share_history) — the literal typed line, e.g. "öErrors" — and fall back
+    /// to the OS process name. No shell hook required.
     var runningProcess: String? {
-        if let command = session.emulator.shellCommand, !command.isEmpty { return command }
-        return session.foregroundProcessName()
+        let osName = session.foregroundProcessName()
+        let running = osName != nil
+        defer { commandWasRunning = running }
+        guard running else { capturedCommand = nil; return nil }
+        if !commandWasRunning {                       // a command just started
+            capturedCommand = TerminalPane.lastHistoryCommand()
+        }
+        return capturedCommand ?? osName
+    }
+
+    /// The most recent command in ~/.zsh_history (extended-history prefix stripped).
+    private static func lastHistoryCommand() -> String? {
+        let path = NSHomeDirectory() + "/.zsh_history"
+        guard let handle = FileHandle(forReadingAtPath: path) else { return nil }
+        defer { try? handle.close() }
+        let end = handle.seekToEndOfFile()
+        let window: UInt64 = 8192                      // read only the tail
+        handle.seek(toFileOffset: end > window ? end - window : 0)
+        let data = handle.readDataToEndOfFile()
+        guard !data.isEmpty else { return nil }
+        let text = String(decoding: data, as: UTF8.self)
+        guard var last = text.split(separator: "\n").last.map(String.init) else { return nil }
+        if last.hasPrefix(":"), let semicolon = last.firstIndex(of: ";") {
+            last = String(last[last.index(after: semicolon)...])   // drop ": <ts>:<dur>;"
+        }
+        last = last.trimmingCharacters(in: .whitespacesAndNewlines)
+        return last.isEmpty ? nil : last
     }
 
     init() {
@@ -69,7 +99,7 @@ final class TerminalPane {
         }
         var environment = ProcessInfo.processInfo.environment
         environment["TERM"] = "xterm-256color"
-        environment["TERM_PROGRAM"] = "Teletype"   // lets the .zshrc hook fire only here
+        environment["TERM_PROGRAM"] = "Teletype"   // identify the terminal (like iTerm / Apple Terminal)
         // Launch the default shell as a *login* shell so it sources ~/.zprofile
         // (Homebrew PATH, etc.); a GUI app otherwise starts with a minimal PATH.
         let launchArgs = (executable == nil && arguments.isEmpty) ? ["-l"] : arguments
