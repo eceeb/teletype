@@ -133,8 +133,15 @@ public final class PTYProcess {
         return name.isEmpty ? nil : name
     }
 
-    /// Asks the child to terminate.
+    /// Asks the child to terminate and releases the PTY master fd. Without the
+    /// close, every closed pane would leak a pseudo-terminal until the app quits,
+    /// eventually exhausting the system-wide PTY limit (and breaking other apps).
+    /// The caller cancels the read source before this, so the fd is unmonitored.
     public func terminate() {
         if pid > 0 { kill(pid, SIGTERM) }
+        if masterFD >= 0 {
+            close(masterFD)
+            masterFD = -1
+        }
     }
 }
