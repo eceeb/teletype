@@ -15,6 +15,9 @@ final class MainWindowController: NSWindowController, NSWindowDelegate {
     private var lastBarSignature = ""
     /// Flattened (tab, pane) list that the sidebar shows — one row per pane.
     private var paneRows: [(tab: TerminalTab, pane: TerminalPane)] = []
+    /// Panes in most-recently-focused order (front = current) so closing a pane
+    /// can return focus to the previously active one.
+    private var paneMRU: [TerminalPane] = []
 
     init() {
         let window = NSWindow(
@@ -92,6 +95,13 @@ final class MainWindowController: NSWindowController, NSWindowDelegate {
             if let tab { self?.removeTab(tab) }
         }
         tab.onTitleChanged = { [weak self] in self?.refreshTabBar() }
+        tab.onPaneFocused = { [weak self] pane in self?.recordPaneFocus(pane) }
+    }
+
+    /// Moves a pane to the front of the focus-MRU list.
+    private func recordPaneFocus(_ pane: TerminalPane) {
+        paneMRU.removeAll { $0 === pane }
+        paneMRU.insert(pane, at: 0)
     }
 
     /// Recreates the saved session, or opens one fresh tab if there's nothing to restore.
@@ -166,6 +176,7 @@ final class MainWindowController: NSWindowController, NSWindowDelegate {
                                      groupLabel: summary.header))
             }
         }
+        paneMRU.removeAll { p in !paneRows.contains { $0.pane === p } }   // drop closed panes
         let activeRow = activePaneRowIndex()
         let signature = "\(activeRow)#" + items.map { "\($0.groupIndex):\($0.groupLabel ?? "")>\($0.title)~\($0.subtitle ?? "")" }.joined(separator: "|")
         guard signature != lastBarSignature else { return }
@@ -195,9 +206,12 @@ final class MainWindowController: NSWindowController, NSWindowDelegate {
     @objc func closeActivePane(_ sender: Any?) {
         guard let tab = activeTab, let active = tab.activePane(for: window?.firstResponder) else { return }
         tab.close(pane: active)   // last pane → tab.onEmpty → removeTab
+        paneMRU.removeAll { $0 === active }
         if tabs.contains(where: { $0 === tab }) {   // tab survived (had a split)
             showActiveTab()
-            if let view = tab.firstPaneView() { window?.makeFirstResponder(view) }
+            // Focus the previously active pane in this tab (MRU), else any pane.
+            let next = paneMRU.first { p in tab.panes.contains { $0 === p } } ?? tab.panes.first
+            if let next { window?.makeFirstResponder(next.view) }
         }
         refreshTabBar()
     }

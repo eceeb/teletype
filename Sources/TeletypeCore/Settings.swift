@@ -42,6 +42,12 @@ public final class TerminalSettings: @unchecked Sendable {
         set { defaults.set(newValue, forKey: Key.newTabDirectory) }
     }
 
+    /// Selected color theme name (nil → default palette + custom bg/fg).
+    public var themeName: String? {
+        get { defaults.string(forKey: Key.themeName) }
+        set { defaults.set(newValue, forKey: Key.themeName) }
+    }
+
     private func color(forKey key: String) -> TermColor? {
         guard let rgb = defaults.array(forKey: key) as? [Int], rgb.count == 3 else { return nil }
         return TermColor(red: UInt8(clamping: rgb[0]),
@@ -60,5 +66,6 @@ public final class TerminalSettings: @unchecked Sendable {
         static let shell = "shell"
         static let tabPlacement = "tabPlacement"
         static let newTabDirectory = "newTabDirectory"
+        static let themeName = "themeName"
     }
 }

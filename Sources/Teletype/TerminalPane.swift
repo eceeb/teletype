@@ -11,6 +11,8 @@ final class TerminalPane {
 
     /// Called when this pane's shell exits (PTY end-of-file).
     var onExit: (() -> Void)?
+    /// Called when this pane gains focus.
+    var onFocus: (() -> Void)?
 
     /// Overrides the sidebar row label (e.g. "Claudette" for a Claude pane).
     var displayName: String?
@@ -67,10 +69,12 @@ final class TerminalPane {
         let settings = AppSettings.store
         let session = TerminalSession(columns: 80, rows: 24)
         session.emulator.setColors(background: settings.backgroundColor,
-                                   foreground: settings.foregroundColor)
+                                   foreground: settings.foregroundColor,
+                                   ansi16: ColorTheme.named(settings.themeName)?.ansi)
         let view = TerminalView(emulator: session.emulator,
                                 fontSize: CGFloat(settings.fontSize),
-                                background: NSColor(settings.backgroundColor))
+                                background: NSColor(settings.backgroundColor),
+                                foreground: NSColor(settings.foregroundColor))
         self.session = session
         self.view = view
 
@@ -78,6 +82,7 @@ final class TerminalPane {
         session.onExit = { [weak self] in self?.onExit?() }
         view.onInput = { [weak session] data in session?.write(data) }
         view.onResize = { [weak session] cols, rows in session?.resize(columns: cols, rows: rows) }
+        view.onFocus = { [weak self] in self?.onFocus?() }
 
         // Live-apply settings changes.
         settingsObserver = NotificationCenter.default.addObserver(
@@ -143,8 +148,10 @@ final class TerminalPane {
     private func applyAppearance() {
         let settings = AppSettings.store
         session.emulator.setColors(background: settings.backgroundColor,
-                                   foreground: settings.foregroundColor)
+                                   foreground: settings.foregroundColor,
+                                   ansi16: ColorTheme.named(settings.themeName)?.ansi)
         view.applyAppearance(fontSize: CGFloat(settings.fontSize),
-                             background: NSColor(settings.backgroundColor))
+                             background: NSColor(settings.backgroundColor),
+                             foreground: NSColor(settings.foregroundColor))
     }
 }

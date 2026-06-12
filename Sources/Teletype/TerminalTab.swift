@@ -1,6 +1,12 @@
 import AppKit
 import TeletypeCore
 
+/// Split view with a dark-gray divider (the system default is a faint hairline).
+@MainActor
+final class PaneSplitView: NSSplitView {
+    override var dividerColor: NSColor { NSColor(white: 0.25, alpha: 1) }
+}
+
 /// One tab: a tree of split panes inside `containerView`. The window shows the
 /// active tab's container. Owns all the split/close logic for its panes.
 @MainActor
@@ -12,6 +18,8 @@ final class TerminalTab {
     var onEmpty: (() -> Void)?
     /// Called when a pane's title or working directory changes (refresh the bar).
     var onTitleChanged: (() -> Void)?
+    /// Called when one of this tab's panes gains focus (for pane MRU).
+    var onPaneFocused: ((TerminalPane) -> Void)?
 
     init(executable: String? = nil, arguments: [String] = [], workingDirectory: String? = nil) {
         containerView.autoresizingMask = [.width, .height]
@@ -37,7 +45,7 @@ final class TerminalTab {
             pane.start(workingDirectory: cwd)
             return pane.view
         case .split(let vertical, let children):
-            let split = NSSplitView()
+            let split = PaneSplitView()
             split.isVertical = vertical
             split.dividerStyle = .thin
             children.forEach { split.addArrangedSubview(buildView(from: $0)) }
@@ -81,7 +89,7 @@ final class TerminalTab {
         let newPane = makePane()
         panes.append(newPane)
 
-        let split = NSSplitView()
+        let split = PaneSplitView()
         split.isVertical = vertical
         split.dividerStyle = .thin
 
@@ -144,6 +152,9 @@ final class TerminalTab {
             if let pane { self?.close(pane: pane) }
         }
         pane.session.emulator.onTitleChange = { [weak self] in self?.onTitleChanged?() }
+        pane.onFocus = { [weak self, weak pane] in
+            if let pane { self?.onPaneFocused?(pane) }
+        }
         return pane
     }
 

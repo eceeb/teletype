@@ -5,6 +5,7 @@ import TeletypeCore
 /// post a change notification so open panes update live.
 struct SettingsView: View {
     @State private var fontSize = AppSettings.store.fontSize
+    @State private var themeName = AppSettings.store.themeName ?? ""
     @State private var background = Color(nsColor: NSColor(AppSettings.store.backgroundColor))
     @State private var foreground = Color(nsColor: NSColor(AppSettings.store.foregroundColor))
     @State private var shell = AppSettings.store.shell ?? ""
@@ -19,6 +20,14 @@ struct SettingsView: View {
                 Text("\(Int(fontSize)) pt")
                     .monospacedDigit()
                     .frame(width: 44, alignment: .trailing)
+            }
+            HStack {
+                Text("Theme")
+                Picker("", selection: $themeName) {
+                    Text("Default").tag("")
+                    ForEach(ColorTheme.all, id: \.name) { Text($0.name).tag($0.name) }
+                }
+                .labelsHidden()
             }
             ColorPicker("Background", selection: $background, supportsOpacity: false)
             ColorPicker("Text", selection: $foreground, supportsOpacity: false)
@@ -68,6 +77,16 @@ struct SettingsView: View {
         }
         .onChange(of: tabsOnLeft) { _, value in
             AppSettings.store.tabPlacement = value ? "left" : "top"
+            AppSettings.notifyChanged()
+        }
+        .onChange(of: themeName) { _, value in
+            AppSettings.store.themeName = value.isEmpty ? nil : value
+            if let theme = ColorTheme.named(value) {   // adopt the theme's bg/fg too
+                AppSettings.store.backgroundColor = theme.background
+                AppSettings.store.foregroundColor = theme.foreground
+                background = Color(nsColor: NSColor(theme.background))
+                foreground = Color(nsColor: NSColor(theme.foreground))
+            }
             AppSettings.notifyChanged()
         }
     }
