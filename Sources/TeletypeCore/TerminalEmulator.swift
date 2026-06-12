@@ -83,8 +83,8 @@ public final class TerminalEmulator {
 
     /// Sets the default foreground/background colors (the theme). ANSI-colored
     /// text keeps its own colors.
-    public func setColors(background: TermColor, foreground: TermColor) {
-        palette = TerminalPalette(defaultForeground: foreground, defaultBackground: background)
+    public func setColors(background: TermColor, foreground: TermColor, ansi16: [TermColor]? = nil) {
+        palette = TerminalPalette(defaultForeground: foreground, defaultBackground: background, ansi16: ansi16)
     }
 
     /// Resizes the grid to the given dimensions (SwiftTerm reflows the buffer).

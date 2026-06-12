@@ -13,19 +13,23 @@ final class TerminalView: NSView {
     private var cellHeight: CGFloat
     private let padding: CGFloat = 4
     private var backgroundColor: NSColor
+    private var foregroundColor: NSColor
 
     /// Called with raw bytes to send to the shell when the user types.
     var onInput: ((Data) -> Void)?
     /// Called with the (columns, rows) that fit the view whenever that changes.
     var onResize: ((Int, Int) -> Void)?
+    /// Called when this pane becomes the first responder (gains focus).
+    var onFocus: (() -> Void)?
     private var lastGridSize: (cols: Int, rows: Int)?
     private var selectionStart: GridPosition?
     private var selectionEnd: GridPosition?
     private var scrollAccumulator: CGFloat = 0
 
-    init(emulator: TerminalEmulator, fontSize: CGFloat = 13, background: NSColor = .black) {
+    init(emulator: TerminalEmulator, fontSize: CGFloat = 13, background: NSColor = .black, foreground: NSColor = .white) {
         self.emulator = emulator
         self.backgroundColor = background
+        self.foregroundColor = foreground
         let font = TerminalFont.regular(ofSize: fontSize)
         self.font = font
         self.boldFont = TerminalFont.bold(ofSize: fontSize)
@@ -40,8 +44,9 @@ final class TerminalView: NSView {
 
     /// Live-applies appearance settings: rebuilds the font at the new size,
     /// updates the background, and reflows the grid.
-    func applyAppearance(fontSize: CGFloat, background: NSColor) {
+    func applyAppearance(fontSize: CGFloat, background: NSColor, foreground: NSColor) {
         backgroundColor = background
+        foregroundColor = foreground
         layer?.backgroundColor = background.cgColor
         let font = TerminalFont.regular(ofSize: fontSize)
         self.font = font
@@ -59,6 +64,11 @@ final class TerminalView: NSView {
     // MARK: - Keyboard input
 
     override var acceptsFirstResponder: Bool { true }
+
+    override func becomeFirstResponder() -> Bool {
+        onFocus?()
+        return super.becomeFirstResponder()
+    }
 
     override func keyDown(with event: NSEvent) {
         // Let ⌘-shortcuts (New Tab, Close, Quit, …) go to the menu instead of
@@ -207,7 +217,7 @@ final class TerminalView: NSView {
                 rect.fill()
 
                 if isSelected(row: row, column: col) {
-                    NSColor.white.withAlphaComponent(0.25).setFill()
+                    foregroundColor.withAlphaComponent(0.25).setFill()
                     rect.fill()
                 }
 
@@ -239,10 +249,10 @@ final class TerminalView: NSView {
             height: cellHeight
         )
         if window?.firstResponder === self {
-            NSColor.white.withAlphaComponent(0.6).setFill()
+            foregroundColor.withAlphaComponent(0.6).setFill()
             rect.fill()
         } else {
-            NSColor.white.withAlphaComponent(0.6).setStroke()
+            foregroundColor.withAlphaComponent(0.6).setStroke()
             let path = NSBezierPath(rect: rect.insetBy(dx: 0.5, dy: 0.5))
             path.lineWidth = 1
             path.stroke()

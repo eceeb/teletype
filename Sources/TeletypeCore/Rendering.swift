@@ -23,6 +23,17 @@ public struct TermColor: Equatable, Sendable {
     }
 }
 
+public extension TermColor {
+    /// Parses "#rrggbb" (the leading # is optional).
+    init(hex: String) {
+        let cleaned = hex.hasPrefix("#") ? String(hex.dropFirst()) : hex
+        let value = UInt64(cleaned, radix: 16) ?? 0
+        self.init(red: UInt8((value >> 16) & 0xff),
+                  green: UInt8((value >> 8) & 0xff),
+                  blue: UInt8(value & 0xff))
+    }
+}
+
 /// One fully-resolved grid cell ready to draw: character, colors (inverse
 /// already applied), column width and styling.
 public struct TerminalCell: Equatable, Sendable {
@@ -47,11 +58,12 @@ struct TerminalPalette: Sendable {
 
     init(
         defaultForeground: TermColor = TermColor(red: 229, green: 229, blue: 229),
-        defaultBackground: TermColor = TermColor(red: 0, green: 0, blue: 0)
+        defaultBackground: TermColor = TermColor(red: 0, green: 0, blue: 0),
+        ansi16: [TermColor]? = nil
     ) {
         self.defaultForeground = defaultForeground
         self.defaultBackground = defaultBackground
-        self.ansi = TerminalPalette.makeAnsi256()
+        self.ansi = TerminalPalette.makeAnsi256(base16: ansi16)
     }
 
     func color(for color: Attribute.Color, isForeground: Bool) -> TermColor {
@@ -65,25 +77,28 @@ struct TerminalPalette: Sendable {
         }
     }
 
-    private static func makeAnsi256() -> [TermColor] {
-        var colors: [TermColor] = [
-            TermColor(red: 0,   green: 0,   blue: 0),    //  0 black
-            TermColor(red: 205, green: 0,   blue: 0),    //  1 red
-            TermColor(red: 0,   green: 205, blue: 0),    //  2 green
-            TermColor(red: 205, green: 205, blue: 0),    //  3 yellow
-            TermColor(red: 0,   green: 0,   blue: 238),  //  4 blue
-            TermColor(red: 205, green: 0,   blue: 205),  //  5 magenta
-            TermColor(red: 0,   green: 205, blue: 205),  //  6 cyan
-            TermColor(red: 229, green: 229, blue: 229),  //  7 white
-            TermColor(red: 127, green: 127, blue: 127),  //  8 bright black
-            TermColor(red: 255, green: 0,   blue: 0),    //  9 bright red
-            TermColor(red: 0,   green: 255, blue: 0),    // 10 bright green
-            TermColor(red: 255, green: 255, blue: 0),    // 11 bright yellow
-            TermColor(red: 92,  green: 92,  blue: 255),  // 12 bright blue
-            TermColor(red: 255, green: 0,   blue: 255),  // 13 bright magenta
-            TermColor(red: 0,   green: 255, blue: 255),  // 14 bright cyan
-            TermColor(red: 255, green: 255, blue: 255),  // 15 bright white
-        ]
+    /// The classic xterm 16-color palette — used when a theme doesn't override it.
+    static let standardBase16: [TermColor] = [
+        TermColor(red: 0,   green: 0,   blue: 0),    //  0 black
+        TermColor(red: 205, green: 0,   blue: 0),    //  1 red
+        TermColor(red: 0,   green: 205, blue: 0),    //  2 green
+        TermColor(red: 205, green: 205, blue: 0),    //  3 yellow
+        TermColor(red: 0,   green: 0,   blue: 238),  //  4 blue
+        TermColor(red: 205, green: 0,   blue: 205),  //  5 magenta
+        TermColor(red: 0,   green: 205, blue: 205),  //  6 cyan
+        TermColor(red: 229, green: 229, blue: 229),  //  7 white
+        TermColor(red: 127, green: 127, blue: 127),  //  8 bright black
+        TermColor(red: 255, green: 0,   blue: 0),    //  9 bright red
+        TermColor(red: 0,   green: 255, blue: 0),    // 10 bright green
+        TermColor(red: 255, green: 255, blue: 0),    // 11 bright yellow
+        TermColor(red: 92,  green: 92,  blue: 255),  // 12 bright blue
+        TermColor(red: 255, green: 0,   blue: 255),  // 13 bright magenta
+        TermColor(red: 0,   green: 255, blue: 255),  // 14 bright cyan
+        TermColor(red: 255, green: 255, blue: 255),  // 15 bright white
+    ]
+
+    private static func makeAnsi256(base16: [TermColor]? = nil) -> [TermColor] {
+        var colors: [TermColor] = (base16?.count == 16) ? base16! : standardBase16
         // 216-color cube (indices 16…231)
         let levels: [UInt8] = [0, 95, 135, 175, 215, 255]
         for r in 0..<6 {
