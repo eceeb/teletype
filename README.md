@@ -63,3 +63,7 @@ swift package update
 
 The bundled font (JetBrainsMono Nerd Font, under `Sources/Teletype/Resources/Fonts`)
 is covered separately by the SIL Open Font License.
+
+The built-in color schemes are adapted from
+[iTerm2-Color-Schemes](https://github.com/mbadolato/iTerm2-Color-Schemes)
+(MIT, © Mark Badolato); each scheme remains © its respective author under its own license.
