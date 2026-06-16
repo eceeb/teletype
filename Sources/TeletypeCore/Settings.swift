@@ -48,6 +48,12 @@ public final class TerminalSettings: @unchecked Sendable {
         set { defaults.set(newValue, forKey: Key.themeName) }
     }
 
+    /// Mouse-wheel scroll multiplier (1 = one line per notch's worth of delta).
+    public var scrollSpeed: Double {
+        get { defaults.object(forKey: Key.scrollSpeed) as? Double ?? 3 }
+        set { defaults.set(newValue, forKey: Key.scrollSpeed) }
+    }
+
     private func color(forKey key: String) -> TermColor? {
         guard let rgb = defaults.array(forKey: key) as? [Int], rgb.count == 3 else { return nil }
         return TermColor(red: UInt8(clamping: rgb[0]),
@@ -67,5 +73,6 @@ public final class TerminalSettings: @unchecked Sendable {
         static let tabPlacement = "tabPlacement"
         static let newTabDirectory = "newTabDirectory"
         static let themeName = "themeName"
+        static let scrollSpeed = "scrollSpeed"
     }
 }

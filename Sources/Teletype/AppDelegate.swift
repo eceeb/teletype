@@ -60,7 +60,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             window.title = "Settings"
             window.styleMask = [.titled, .closable]
             window.isReleasedWhenClosed = false
-            window.setContentSize(NSSize(width: 380, height: 340))
+            window.setContentSize(NSSize(width: 380, height: 380))
             settingsWindow = window
         }
         settingsWindow?.center()

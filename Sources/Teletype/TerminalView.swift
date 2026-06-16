@@ -148,7 +148,10 @@ final class TerminalView: NSView {
     // MARK: - Scrolling
 
     override func scrollWheel(with event: NSEvent) {
-        scrollAccumulator += event.scrollingDeltaY
+        // Boost the coarse mouse wheel by the configured speed; leave precise
+        // (trackpad) deltas alone so they stay natural.
+        let speed = event.hasPreciseScrollingDeltas ? 1 : CGFloat(AppSettings.store.scrollSpeed)
+        scrollAccumulator += event.scrollingDeltaY * speed
         let lines = Int(scrollAccumulator / cellHeight)
         guard lines != 0 else { return }
         scrollAccumulator -= CGFloat(lines) * cellHeight
@@ -217,7 +220,7 @@ final class TerminalView: NSView {
                 rect.fill()
 
                 if isSelected(row: row, column: col) {
-                    foregroundColor.withAlphaComponent(0.25).setFill()
+                    NSColor(srgbRed: 1.0, green: 0.35, blue: 0.65, alpha: 0.45).setFill()
                     rect.fill()
                 }
 
