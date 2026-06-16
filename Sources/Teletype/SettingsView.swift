@@ -6,6 +6,7 @@ import TeletypeCore
 struct SettingsView: View {
     @State private var fontSize = AppSettings.store.fontSize
     @State private var themeName = AppSettings.store.themeName ?? ""
+    @State private var scrollSpeed = AppSettings.store.scrollSpeed
     @State private var background = Color(nsColor: NSColor(AppSettings.store.backgroundColor))
     @State private var foreground = Color(nsColor: NSColor(AppSettings.store.foregroundColor))
     @State private var shell = AppSettings.store.shell ?? ""
@@ -18,6 +19,13 @@ struct SettingsView: View {
                 Text("Font size")
                 Slider(value: $fontSize, in: 8...28, step: 1)
                 Text("\(Int(fontSize)) pt")
+                    .monospacedDigit()
+                    .frame(width: 44, alignment: .trailing)
+            }
+            HStack {
+                Text("Scroll speed")
+                Slider(value: $scrollSpeed, in: 1...8, step: 0.5)
+                Text(String(format: "%.1f×", scrollSpeed))
                     .monospacedDigit()
                     .frame(width: 44, alignment: .trailing)
             }
@@ -78,6 +86,9 @@ struct SettingsView: View {
         .onChange(of: tabsOnLeft) { _, value in
             AppSettings.store.tabPlacement = value ? "left" : "top"
             AppSettings.notifyChanged()
+        }
+        .onChange(of: scrollSpeed) { _, value in
+            AppSettings.store.scrollSpeed = value   // scrollWheel reads this live
         }
         .onChange(of: themeName) { _, value in
             AppSettings.store.themeName = value.isEmpty ? nil : value
