@@ -11,6 +11,7 @@ struct SettingsView: View {
     @State private var foreground = Color(nsColor: NSColor(AppSettings.store.foregroundColor))
     @State private var shell = AppSettings.store.shell ?? ""
     @State private var newTabDir = AppSettings.store.newTabDirectory ?? ""
+    @State private var claudeCmd = AppSettings.store.claudeCommand ?? ""
     @State private var tabsOnLeft = (AppSettings.store.tabPlacement == "left")
 
     var body: some View {
@@ -46,6 +47,10 @@ struct SettingsView: View {
             HStack {
                 Text("New-tab folder")
                 TextField("~ (home)", text: $newTabDir)
+            }
+            HStack {
+                Text("Claude command")
+                TextField("claude (auto-detect)", text: $claudeCmd)
             }
             HStack {
                 Text("Tabs")
@@ -89,6 +94,9 @@ struct SettingsView: View {
         }
         .onChange(of: scrollSpeed) { _, value in
             AppSettings.store.scrollSpeed = value   // scrollWheel reads this live
+        }
+        .onChange(of: claudeCmd) { _, value in
+            AppSettings.store.claudeCommand = value.isEmpty ? nil : value
         }
         .onChange(of: themeName) { _, value in
             AppSettings.store.themeName = value.isEmpty ? nil : value
