@@ -54,6 +54,12 @@ public final class TerminalSettings: @unchecked Sendable {
         set { defaults.set(newValue, forKey: Key.scrollSpeed) }
     }
 
+    /// Path or name of the `claude` binary; nil/empty → auto-detect on PATH.
+    public var claudeCommand: String? {
+        get { defaults.string(forKey: Key.claudeCommand) }
+        set { defaults.set(newValue, forKey: Key.claudeCommand) }
+    }
+
     private func color(forKey key: String) -> TermColor? {
         guard let rgb = defaults.array(forKey: key) as? [Int], rgb.count == 3 else { return nil }
         return TermColor(red: UInt8(clamping: rgb[0]),
@@ -74,5 +80,6 @@ public final class TerminalSettings: @unchecked Sendable {
         static let newTabDirectory = "newTabDirectory"
         static let themeName = "themeName"
         static let scrollSpeed = "scrollSpeed"
+        static let claudeCommand = "claudeCommand"
     }
 }
