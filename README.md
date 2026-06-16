@@ -14,10 +14,14 @@ A fast, native macOS terminal emulator, built in Swift + AppKit with
   (bundled JetBrainsMono)
 - Mouse selection + copy (drag / double-click word / triple-click line), paste
 - Scrollback, visible cursor, live resize, window position persistence
-- Live **settings**: font size, background & text color, shell, tab placement
+- **Color themes** — 13 built-in profiles (Dracula, Nord, Gruvbox, Solarized
+  Dark/Light, Tokyo Night, Catppuccin, Monokai, …) that recolor the
+  background, text and all 16 ANSI colors
+- Live **settings**: font size, color theme, background & text color, scroll
+  speed, shell, new-tab folder, tab placement, and the `claude` command
 - A **Claude** tab/pane that runs the `claude` CLI
 - Configurable shell (defaults to `$SHELL`); a new split inherits the active
-  pane's directory
+  pane's directory, new tabs open in a configurable folder
 
 ## Keyboard shortcuts
 
