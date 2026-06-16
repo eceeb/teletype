@@ -33,21 +33,39 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     private func withClaude(_ action: (String) -> Void) {
-        guard let claude = Self.resolveExecutable(named: "claude") else {
+        guard let claude = Self.resolveClaude() else {
             let alert = NSAlert()
             alert.messageText = "Claude CLI not found"
-            alert.informativeText = "Couldn't find 'claude' on your PATH. Install Claude Code, then try again."
+            alert.informativeText = "Couldn't find 'claude'. Set its path in Settings → Claude command, or install Claude Code."
             alert.runModal()
             return
         }
         action(claude)
     }
 
+    /// Resolves the claude binary: the configured path/name first, otherwise an
+    /// auto-search over PATH plus the usual install locations.
+    private static func resolveClaude() -> String? {
+        if let configured = AppSettings.store.claudeCommand, !configured.isEmpty {
+            let expanded = (configured as NSString).expandingTildeInPath
+            if expanded.hasPrefix("/") {
+                return FileManager.default.isExecutableFile(atPath: expanded) ? expanded : nil
+            }
+            return resolveExecutable(named: expanded)
+        }
+        return resolveExecutable(named: "claude")
+    }
+
     private static func resolveExecutable(named name: String) -> String? {
-        let pathVariable = ProcessInfo.processInfo.environment["PATH"] ?? "/usr/bin:/bin:/usr/local/bin"
-        for directory in pathVariable.split(separator: ":") {
+        let fileManager = FileManager.default
+        // A GUI app launched via /Applications gets a minimal PATH, so also probe
+        // the common install dirs (Homebrew etc.) where `claude` usually lives.
+        let envPath = ProcessInfo.processInfo.environment["PATH"] ?? ""
+        let common = ["/opt/homebrew/bin", "/usr/local/bin", "/usr/bin", "/bin",
+                      NSHomeDirectory() + "/.local/bin"]
+        for directory in envPath.split(separator: ":").map(String.init) + common {
             let candidate = "\(directory)/\(name)"
-            if FileManager.default.isExecutableFile(atPath: candidate) { return candidate }
+            if fileManager.isExecutableFile(atPath: candidate) { return candidate }
         }
         return nil
     }
@@ -60,7 +78,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             window.title = "Settings"
             window.styleMask = [.titled, .closable]
             window.isReleasedWhenClosed = false
-            window.setContentSize(NSSize(width: 380, height: 380))
+            window.setContentSize(NSSize(width: 380, height: 420))
             settingsWindow = window
         }
         settingsWindow?.center()
