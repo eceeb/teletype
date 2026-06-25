@@ -145,16 +145,32 @@ final class TerminalView: NSView {
         }
     }
 
+    /// Drops any active selection. Called when new output arrives: the selected
+    /// grid cells no longer hold the text the user picked (e.g. after a pager
+    /// like `git log` redraws or exits), so the highlight would be stale.
+    func clearSelectionForOutput() {
+        guard selectionStart != nil || selectionEnd != nil else { return }
+        selectionStart = nil
+        selectionEnd = nil
+    }
+
     // MARK: - Scrolling
 
     override func scrollWheel(with event: NSEvent) {
-        // Boost the coarse mouse wheel by the configured speed; leave precise
-        // (trackpad) deltas alone so they stay natural.
-        let speed = event.hasPreciseScrollingDeltas ? 1 : CGFloat(AppSettings.store.scrollSpeed)
-        scrollAccumulator += event.scrollingDeltaY * speed
-        let lines = Int(scrollAccumulator / cellHeight)
+        let delta = event.scrollingDeltaY
+        guard delta != 0 else { return }
+        let speed = CGFloat(AppSettings.store.scrollSpeed)
+        // Two device classes report `scrollingDeltaY` in different units:
+        //  - Trackpad / Magic Mouse (precise): points → divide by the cell height
+        //    to get lines.
+        //  - Classic mouse wheel (non-precise): already line-based, but split into
+        //    tiny sub-steps (~0.1) by macOS smooth-scrolling — so accumulate
+        //    directly without dividing, or slow scrolling never reaches a line.
+        let perLine = event.hasPreciseScrollingDeltas ? cellHeight : 1
+        scrollAccumulator += delta * speed
+        let lines = Int(scrollAccumulator / perLine)
         guard lines != 0 else { return }
-        scrollAccumulator -= CGFloat(lines) * cellHeight
+        scrollAccumulator -= CGFloat(lines) * perLine
         emulator.scroll(lines: lines)   // positive = toward older output
         needsDisplay = true
     }
