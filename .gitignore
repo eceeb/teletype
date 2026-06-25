@@ -2,3 +2,6 @@
 .swiftpm/
 .DS_Store
 *.xcodeproj
+
+# Personal, machine-local Claude Code settings
+.claude/settings.local.json
