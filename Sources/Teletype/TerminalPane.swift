@@ -78,7 +78,10 @@ final class TerminalPane {
         self.session = session
         self.view = view
 
-        session.onUpdate = { [weak view] in view?.needsDisplay = true }
+        session.onUpdate = { [weak view] in
+            view?.clearSelectionForOutput()
+            view?.needsDisplay = true
+        }
         session.onExit = { [weak self] in self?.onExit?() }
         view.onInput = { [weak session] data in session?.write(data) }
         view.onResize = { [weak session] cols, rows in session?.resize(columns: cols, rows: rows) }
