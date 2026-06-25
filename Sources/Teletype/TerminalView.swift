@@ -24,7 +24,7 @@ final class TerminalView: NSView {
     private var lastGridSize: (cols: Int, rows: Int)?
     private var selectionStart: GridPosition?
     private var selectionEnd: GridPosition?
-    private var scrollAccumulator: CGFloat = 0
+    private var scrollAccumulator = ScrollAccumulator()
 
     init(emulator: TerminalEmulator, fontSize: CGFloat = 13, background: NSColor = .black, foreground: NSColor = .white) {
         self.emulator = emulator
@@ -157,20 +157,12 @@ final class TerminalView: NSView {
     // MARK: - Scrolling
 
     override func scrollWheel(with event: NSEvent) {
-        let delta = event.scrollingDeltaY
-        guard delta != 0 else { return }
-        let speed = CGFloat(AppSettings.store.scrollSpeed)
-        // Two device classes report `scrollingDeltaY` in different units:
-        //  - Trackpad / Magic Mouse (precise): points → divide by the cell height
-        //    to get lines.
-        //  - Classic mouse wheel (non-precise): already line-based, but split into
-        //    tiny sub-steps (~0.1) by macOS smooth-scrolling — so accumulate
-        //    directly without dividing, or slow scrolling never reaches a line.
-        let perLine = event.hasPreciseScrollingDeltas ? cellHeight : 1
-        scrollAccumulator += delta * speed
-        let lines = Int(scrollAccumulator / perLine)
+        let lines = scrollAccumulator.lines(
+            delta: Double(event.scrollingDeltaY),
+            precise: event.hasPreciseScrollingDeltas,
+            speed: AppSettings.store.scrollSpeed,
+            cellHeight: Double(cellHeight))
         guard lines != 0 else { return }
-        scrollAccumulator -= CGFloat(lines) * perLine
         emulator.scroll(lines: lines)   // positive = toward older output
         needsDisplay = true
     }
