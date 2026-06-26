@@ -37,6 +37,7 @@ final class MainWindowController: NSWindowController, NSWindowDelegate {
 
         tabBar.onSelect = { [weak self] index in self?.selectPaneRow(index) }
         tabBar.onNew = { [weak self] in self?.newTab() }
+        tabBar.onRenameGroup = { [weak self] groupIndex, name in self?.renameGroup(groupIndex, to: name) }
 
         // Restore saved frame (or center on first run) and keep it saved.
         let autosave = NSWindow.FrameAutosaveName("TeletypeMainWindow")
@@ -110,8 +111,9 @@ final class MainWindowController: NSWindowController, NSWindowDelegate {
             newTab()
             return
         }
-        for node in layout.tabs {
-            let tab = TerminalTab(restoring: node)
+        for saved in layout.tabs {
+            let tab = TerminalTab(restoring: saved.root)
+            tab.customName = saved.name
             configure(tab)
             tabs.append(tab)
         }
@@ -119,7 +121,19 @@ final class MainWindowController: NSWindowController, NSWindowDelegate {
     }
 
     private func saveSession() {
-        SessionPersistence.save(SessionLayout(tabs: tabs.map { $0.layoutNode() }))
+        SessionPersistence.save(SessionLayout(tabs: tabs.map {
+            SavedTab(name: $0.customName, root: $0.layoutNode())
+        }))
+    }
+
+    /// Pins (or clears, when blank) a tab's sidebar group name, then persists it.
+    private func renameGroup(_ index: Int, to name: String?) {
+        guard tabs.indices.contains(index) else { return }
+        let trimmed = name?.trimmingCharacters(in: .whitespaces)
+        tabs[index].customName = (trimmed?.isEmpty == false) ? trimmed : nil
+        lastBarSignature = ""        // force a rebuild even if the derived label matches
+        refreshTabBar()
+        saveSession()
     }
 
     func selectTab(at index: Int) {
@@ -173,7 +187,7 @@ final class MainWindowController: NSWindowController, NSWindowDelegate {
                 items.append(TabItem(title: pane.displayName ?? summary.labels[offset],
                                      subtitle: pane.runningProcess,
                                      groupIndex: groupIndex,
-                                     groupLabel: summary.header))
+                                     groupLabel: tab.customName ?? summary.header))
             }
         }
         paneMRU.removeAll { p in !paneRows.contains { $0.pane === p } }   // drop closed panes

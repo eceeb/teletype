@@ -14,6 +14,10 @@ final class TerminalTab {
     let containerView = NSView()
     private(set) var panes: [TerminalPane] = []
 
+    /// User-given group name. While nil the sidebar header is derived from the
+    /// panes' shared folder; once set it pins the header until edited again.
+    var customName: String?
+
     /// Called when the tab's last pane has closed, so the owner can drop the tab.
     var onEmpty: (() -> Void)?
     /// Called when a pane's title or working directory changes (refresh the bar).
