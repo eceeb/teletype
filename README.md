@@ -49,6 +49,8 @@ bash packaging/install.sh    # build release + install Teletype.app into /Applic
 swift run Teletype           # run without installing
 ```
 
+Contributing? See [CLAUDE.md](CLAUDE.md) for the project layout, data flow, and conventions.
+
 ## Updating dependencies
 
 The only dependency is SwiftTerm:
