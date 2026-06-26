@@ -68,9 +68,12 @@ final class TabRowView: NSView {
 
 /// The tab bar: compact buttons across the top, or rich rows down the left.
 @MainActor
-final class TabBarView: NSView {
+final class TabBarView: NSView, NSTextFieldDelegate {
     var onSelect: ((Int) -> Void)?
     var onNew: (() -> Void)?
+    /// Double-clicking a group header renames it: (groupIndex, newName); a blank
+    /// name clears the override and restores the folder-derived label.
+    var onRenameGroup: ((Int, String?) -> Void)?
 
     var placement: TabPlacement = .top {
         didSet { rebuild() }
@@ -80,6 +83,10 @@ final class TabBarView: NSView {
     private var activeIndex = 0
     private var tabViews: [NSView] = []
     private let plusButton = NSButton(title: "+", target: nil, action: nil)
+    /// Clickable rects of the group headers, refreshed on each draw (left placement).
+    private var headerBoxes: [(rect: NSRect, group: Int)] = []
+    private var editField: NSTextField?
+    private var editingGroup: Int?
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
@@ -167,6 +174,7 @@ final class TabBarView: NSView {
     /// Draws each group's colored rounded background + its parent-folder header.
     override func draw(_ dirtyRect: NSRect) {
         super.draw(dirtyRect)
+        headerBoxes = []
         guard placement == .left else { return }
         var i = 0
         while i < tabViews.count, i < items.count {
@@ -190,6 +198,7 @@ final class TabBarView: NSView {
                     .foregroundColor: NSColor.labelColor
                 ]
                 (label as NSString).draw(at: NSPoint(x: 14, y: top + 3), withAttributes: attributes)
+                headerBoxes.append((NSRect(x: box.minX, y: top, width: box.width, height: headerSpace), group))
             }
             i = j
         }
@@ -207,6 +216,50 @@ final class TabBarView: NSView {
         ]
         return palette[index % palette.count].withAlphaComponent(0.20)
     }
+
+    // MARK: - Renaming a group header
+
+    /// Double-click on a header opens an inline editor for that group's name.
+    override func mouseDown(with event: NSEvent) {
+        let point = convert(event.locationInWindow, from: nil)
+        guard placement == .left, event.clickCount == 2,
+              let hit = headerBoxes.first(where: { $0.rect.contains(point) })
+        else { return super.mouseDown(with: event) }
+        beginRename(group: hit.group, in: hit.rect)
+    }
+
+    private func beginRename(group: Int, in rect: NSRect) {
+        commitRename()        // close any editor already open
+        let field = NSTextField(frame: NSRect(x: rect.minX, y: rect.minY,
+                                               width: rect.width, height: max(rect.height, 20)))
+        field.font = .systemFont(ofSize: 11, weight: .bold)
+        field.stringValue = items.first { $0.groupIndex == group }?.groupLabel ?? ""
+        field.bezelStyle = .roundedBezel
+        field.focusRingType = .none
+        field.delegate = self
+        field.target = self
+        field.action = #selector(commitRenameAction)
+        addSubview(field)
+        editField = field
+        editingGroup = group
+        window?.makeFirstResponder(field)
+        field.currentEditor()?.selectAll(nil)
+    }
+
+    @objc private func commitRenameAction() { commitRename() }
+
+    /// Applies the edited name (blank → nil, restoring the derived label) and
+    /// tears the editor down. Idempotent so Enter + end-editing don't double-fire.
+    private func commitRename() {
+        guard let field = editField, let group = editingGroup else { return }
+        editField = nil
+        editingGroup = nil
+        let value = field.stringValue
+        field.removeFromSuperview()
+        onRenameGroup?(group, value)
+    }
+
+    func controlTextDidEndEditing(_ obj: Notification) { commitRename() }
 }
 
 /// Lays out the tab bar + content area, switching between top and left placement.
