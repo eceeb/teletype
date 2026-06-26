@@ -33,3 +33,22 @@ import Testing
     #expect(restored?.tabs.first?.name == nil)
     #expect(restored?.tabs.first?.root == .leaf(cwd: "/Users/elce"))
 }
+
+/// Mirrors SessionPersistence.save/load (UserDefaults + the real key): a named
+/// tab must come back named after the store-and-reload an app restart does.
+@Test func namedTabSurvivesUserDefaultsRoundTrip() throws {
+    let defaults = UserDefaults(suiteName: "teletype.persist.\(UUID().uuidString)")!
+    let key = "TeletypeSessionLayout"
+    let saved = SessionLayout(tabs: [
+        SavedTab(name: "Deploys", root: .leaf(cwd: "/tmp")),
+        SavedTab(name: nil, root: .leaf(cwd: "/Users/elce"))
+    ])
+
+    defaults.set(saved.encoded(), forKey: key)            // ≈ saveSession() on quit
+    let data = try #require(defaults.data(forKey: key))   // ≈ restoreSession() on launch
+    let restored = try #require(SessionLayout.decoded(from: data))
+
+    #expect(restored.tabs[0].name == "Deploys")
+    #expect(restored.tabs[1].name == nil)
+    #expect(restored == saved)
+}
