@@ -176,19 +176,22 @@ final class TabBarView: NSView, NSTextFieldDelegate {
         super.draw(dirtyRect)
         headerBoxes = []
         guard placement == .left else { return }
-        var i = 0
-        while i < tabViews.count, i < items.count {
-            let group = items[i].groupIndex
-            let label = items[i].groupLabel
-            var last = i
-            var j = i + 1
-            while j < tabViews.count, j < items.count, items[j].groupIndex == group {
-                last = j
-                j += 1
+        // Walk the rows once, drawing one rounded box per contiguous group (panes
+        // sharing a groupIndex). groupStart/groupEnd bracket the current group;
+        // scan looks ahead for the next group boundary.
+        var groupStart = 0
+        while groupStart < tabViews.count, groupStart < items.count {
+            let group = items[groupStart].groupIndex
+            let label = items[groupStart].groupLabel
+            var groupEnd = groupStart
+            var scan = groupStart + 1
+            while scan < tabViews.count, scan < items.count, items[scan].groupIndex == group {
+                groupEnd = scan
+                scan += 1
             }
             let headerSpace: CGFloat = label != nil ? 18 : 0
-            let top = tabViews[i].frame.minY - headerSpace - 4
-            let bottom = tabViews[last].frame.maxY + 4
+            let top = tabViews[groupStart].frame.minY - headerSpace - 4
+            let bottom = tabViews[groupEnd].frame.maxY + 4
             let box = NSRect(x: 6, y: top, width: bounds.width - 12, height: bottom - top)
             groupColor(group).setFill()
             NSBezierPath(roundedRect: box, xRadius: 8, yRadius: 8).fill()
@@ -200,7 +203,7 @@ final class TabBarView: NSView, NSTextFieldDelegate {
                 (label as NSString).draw(at: NSPoint(x: 14, y: top + 3), withAttributes: attributes)
                 headerBoxes.append((NSRect(x: box.minX, y: top, width: box.width, height: headerSpace), group))
             }
-            i = j
+            groupStart = scan
         }
     }
 

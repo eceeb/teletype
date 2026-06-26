@@ -52,7 +52,9 @@ final class TerminalPane {
         guard let handle = FileHandle(forReadingAtPath: path) else { return nil }
         defer { try? handle.close() }
         let end = handle.seekToEndOfFile()
-        let window: UInt64 = 8192                      // read only the tail
+        // We only need the last line, so read a tail rather than the whole
+        // (possibly large) history file. 8 KB comfortably holds the final entry.
+        let window: UInt64 = 8192
         handle.seek(toFileOffset: end > window ? end - window : 0)
         let data = handle.readDataToEndOfFile()
         guard !data.isEmpty else { return nil }
