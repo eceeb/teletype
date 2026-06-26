@@ -10,11 +10,39 @@ public indirect enum PaneNode: Codable, Equatable, Sendable {
     case split(vertical: Bool, children: [PaneNode])
 }
 
-/// The whole window: one `PaneNode` tree per tab, in order.
-public struct SessionLayout: Codable, Equatable, Sendable {
-    public var tabs: [PaneNode]
+/// One saved tab: its pane tree plus an optional user-given name. While `name`
+/// is nil the sidebar header is derived from the panes' shared folder; once the
+/// user renames the group, `name` pins it regardless of the working directory.
+public struct SavedTab: Codable, Equatable, Sendable {
+    public var name: String?
+    public var root: PaneNode
 
-    public init(tabs: [PaneNode]) {
+    public init(name: String?, root: PaneNode) {
+        self.name = name
+        self.root = root
+    }
+
+    private enum CodingKeys: String, CodingKey { case name, root }
+
+    /// Backward compatible: older sessions stored each tab as a bare `PaneNode`,
+    /// which has no `root` key — fall back to decoding the node directly.
+    public init(from decoder: any Decoder) throws {
+        if let keyed = try? decoder.container(keyedBy: CodingKeys.self),
+           keyed.contains(.root) {
+            name = try keyed.decodeIfPresent(String.self, forKey: .name)
+            root = try keyed.decode(PaneNode.self, forKey: .root)
+        } else {
+            name = nil
+            root = try PaneNode(from: decoder)
+        }
+    }
+}
+
+/// The whole window: one saved tab per window tab, in order.
+public struct SessionLayout: Codable, Equatable, Sendable {
+    public var tabs: [SavedTab]
+
+    public init(tabs: [SavedTab]) {
         self.tabs = tabs
     }
 
