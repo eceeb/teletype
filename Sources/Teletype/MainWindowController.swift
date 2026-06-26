@@ -127,6 +127,8 @@ final class MainWindowController: NSWindowController, NSWindowDelegate {
     }
 
     /// Pins (or clears, when blank) a tab's sidebar group name, then persists it.
+    /// `index` is a group index from the tab bar, which equals the tab's position
+    /// in `tabs` — refreshTabBar() numbers the groups via `tabs.enumerated()`.
     private func renameGroup(_ index: Int, to name: String?) {
         guard tabs.indices.contains(index) else { return }
         let trimmed = name?.trimmingCharacters(in: .whitespaces)
