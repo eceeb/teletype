@@ -18,8 +18,15 @@ public final class TerminalEmulator {
         delegate = NoopDelegate()
         terminal = Terminal(delegate: delegate)
         terminal.resize(cols: columns, rows: rows)
-        // Track the live bottom: SwiftTerm reports it whenever output scrolls.
-        delegate.onScrolled = { [weak self] yDisp in self?.liveBottom = yDisp }
+        // Track the live bottom, but only for the normal buffer. The alternate
+        // screen (full-screen apps — e.g. git's `less` pager) has no scrollback
+        // and fires its own scroll events; letting those overwrite liveBottom
+        // leaves it stale once the app exits, which shifts the viewport out from
+        // under the cursor. See isScrolledBack.
+        delegate.onScrolled = { [weak self] yDisp in
+            guard let self, !self.terminal.isCurrentBufferAlternate else { return }
+            self.liveBottom = yDisp
+        }
         // Forward terminal→program replies to the PTY.
         delegate.onSend = { [weak self] data in self?.onRespond?(Data(data)) }
     }
@@ -78,8 +85,11 @@ public final class TerminalEmulator {
         terminal.buffer.yDisp = liveBottom
     }
 
-    /// Whether the viewport is scrolled away from the live bottom.
-    public var isScrolledBack: Bool { terminal.buffer.yDisp < liveBottom }
+    /// Whether the viewport is scrolled away from the live bottom. The alternate
+    /// screen never scrolls back, so only the normal buffer can be.
+    public var isScrolledBack: Bool {
+        !terminal.isCurrentBufferAlternate && terminal.buffer.yDisp < liveBottom
+    }
 
     /// Sets the default foreground/background colors (the theme). ANSI-colored
     /// text keeps its own colors.

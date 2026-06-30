@@ -16,4 +16,25 @@ struct ScrollTests {
         term.scrollToBottom()
         #expect(term.isScrolledBack == false)
     }
+
+    /// A full-screen pager (git uses `less`, which switches to the alternate
+    /// screen) must not leave the cursor mis-aligned after it exits. Regression:
+    /// alt-screen scroll events corrupted the tracked live bottom, so afterwards
+    /// the view was shifted out from under the cursor — typing showed up on a
+    /// different row than the drawn cursor.
+    @Test func cursorStaysAlignedAfterAlternateBufferPager() {
+        let term = TerminalEmulator(columns: 20, rows: 5)
+        func feed(_ s: String) { term.feed(Data(s.utf8)) }
+
+        for i in 0..<12 { feed("line\(i)\r\n") }    // build a scrollback (yBase > 0)
+        feed("PROMPT>")                             // cursor sits just after the prompt
+        feed("\u{1b}[?1049h")                       // enter the alternate screen
+        for i in 0..<12 { feed("pager\(i)\r\n") }   // scroll within it, like a pager
+        feed("\u{1b}[?1049l")                       // leave it — back to the prompt
+        term.scrollToBottom()                       // the view does this on new output
+
+        #expect(term.isScrolledBack == false)
+        let cursor = term.cursorPosition
+        #expect(term.line(cursor.row).hasPrefix("PROMPT>"))   // drawn row matches cursor
+    }
 }
