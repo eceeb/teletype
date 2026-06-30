@@ -33,7 +33,13 @@ public final class TerminalEmulator {
 
     /// Feeds raw output bytes into the parser, updating the grid.
     public func feed(_ data: Data) {
+        let wasAtBottom = !isScrolledBack
         terminal.feed(byteArray: [UInt8](data))
+        // Clear-scrollback (ED 3, what `clear` sends) and alt-screen switches move
+        // yBase without firing a scroll event, leaving liveBottom stale. If we were
+        // at the live bottom before the feed, we still are after it — re-sync so
+        // isScrolledBack and scrollToBottom stay correct.
+        if wasAtBottom { liveBottom = terminal.buffer.yDisp }
     }
 
     /// The visible text of a row (0 = top of the visible area), trailing
