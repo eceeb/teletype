@@ -37,4 +37,22 @@ struct ScrollTests {
         let cursor = term.cursorPosition
         #expect(term.line(cursor.row).hasPrefix("PROMPT>"))   // drawn row matches cursor
     }
+
+    /// `clear` on a full scrollback emits ED 3 (\u{1b}[3J), which drops yBase and
+    /// yDisp without a scroll event. The tracked live bottom must follow, or the
+    /// view is left wrongly "scrolled back" and jumps far past the end on the next
+    /// scroll-to-bottom — the screen renders garbage.
+    @Test func clearOnFullScrollbackStaysAtBottom() {
+        let term = TerminalEmulator(columns: 20, rows: 5)
+        func feed(_ s: String) { term.feed(Data(s.utf8)) }
+
+        for i in 1...400 { feed("\(i)\r\n") }       // seq 400 → large scrollback
+        feed("\u{1b}[3J\u{1b}[H\u{1b}[2J")          // exactly what `clear` sends
+        term.scrollToBottom()                       // the view does this on output
+        feed("PROMPT>")                             // the shell redraws its prompt
+
+        #expect(term.isScrolledBack == false)
+        let cursor = term.cursorPosition
+        #expect(term.line(cursor.row).hasPrefix("PROMPT>"))
+    }
 }
