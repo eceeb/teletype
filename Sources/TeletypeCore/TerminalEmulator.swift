@@ -11,22 +11,15 @@ public final class TerminalEmulator {
     private let terminal: Terminal
     private let delegate: NoopDelegate
     private var palette = TerminalPalette.standard
-    /// The display offset of the live (newest) screen — the bottom scroll bound.
+    /// Shadows SwiftTerm's `yBase` (the bottom scroll bound), which isn't public:
+    /// the display offset of the live, newest screen. Re-anchored by `syncLiveBottom`
+    /// after anything that can move yBase.
     private var liveBottom = 0
 
     public init(columns: Int = 80, rows: Int = 24) {
         delegate = NoopDelegate()
         terminal = Terminal(delegate: delegate)
         terminal.resize(cols: columns, rows: rows)
-        // Track the live bottom, but only for the normal buffer. The alternate
-        // screen (full-screen apps — e.g. git's `less` pager) has no scrollback
-        // and fires its own scroll events; letting those overwrite liveBottom
-        // leaves it stale once the app exits, which shifts the viewport out from
-        // under the cursor. See isScrolledBack.
-        delegate.onScrolled = { [weak self] yDisp in
-            guard let self, !self.terminal.isCurrentBufferAlternate else { return }
-            self.liveBottom = yDisp
-        }
         // Forward terminal→program replies to the PTY.
         delegate.onSend = { [weak self] data in self?.onRespond?(Data(data)) }
     }
@@ -35,11 +28,7 @@ public final class TerminalEmulator {
     public func feed(_ data: Data) {
         let wasAtBottom = !isScrolledBack
         terminal.feed(byteArray: [UInt8](data))
-        // Clear-scrollback (ED 3, what `clear` sends) and alt-screen switches move
-        // yBase without firing a scroll event, leaving liveBottom stale. If we were
-        // at the live bottom before the feed, we still are after it — re-sync so
-        // isScrolledBack and scrollToBottom stay correct.
-        if wasAtBottom { liveBottom = terminal.buffer.yDisp }
+        syncLiveBottom(wasAtBottom: wasAtBottom)
     }
 
     /// The visible text of a row (0 = top of the visible area), trailing
@@ -97,6 +86,16 @@ public final class TerminalEmulator {
         !terminal.isCurrentBufferAlternate && terminal.buffer.yDisp < liveBottom
     }
 
+    /// Re-anchors `liveBottom` after an operation that can move SwiftTerm's yBase
+    /// (feeding output, resizing). yBase isn't public, so we shadow it: if we were
+    /// at the live bottom, we still are, so liveBottom follows the new yDisp. This
+    /// keeps isScrolledBack/scrollToBottom correct even after moves with no scroll
+    /// event — clear-scrollback (ED 3, sent by `clear`) and alt-screen switches.
+    /// While scrolled back, leave it alone so the saved position sticks.
+    private func syncLiveBottom(wasAtBottom: Bool) {
+        if wasAtBottom { liveBottom = terminal.buffer.yDisp }
+    }
+
     /// Sets the default foreground/background colors (the theme). ANSI-colored
     /// text keeps its own colors.
     public func setColors(background: TermColor, foreground: TermColor, ansi16: [TermColor]? = nil) {
@@ -105,7 +104,9 @@ public final class TerminalEmulator {
 
     /// Resizes the grid to the given dimensions (SwiftTerm reflows the buffer).
     public func resize(columns: Int, rows: Int) {
+        let wasAtBottom = !isScrolledBack
         terminal.resize(cols: columns, rows: rows)
+        syncLiveBottom(wasAtBottom: wasAtBottom)
     }
 
     /// The fully-resolved cell at the given position (row 0 / col 0 = top-left
@@ -186,14 +187,12 @@ public final class TerminalEmulator {
     /// which the terminal uses to reply to the host (wired up later).
     private final class NoopDelegate: TerminalDelegate {
         var cursorVisible = true
-        var onScrolled: ((Int) -> Void)?
         var title = ""
         var onChange: (() -> Void)?
         var onSend: ((ArraySlice<UInt8>) -> Void)?
         func send(source: Terminal, data: ArraySlice<UInt8>) { onSend?(data) }
         func showCursor(source: Terminal) { cursorVisible = true }
         func hideCursor(source: Terminal) { cursorVisible = false }
-        func scrolled(source: Terminal, yDisp: Int) { onScrolled?(yDisp) }
         func setTerminalTitle(source: Terminal, title: String) {
             self.title = title
             onChange?()
