@@ -11,10 +11,14 @@ public final class TerminalEmulator {
     private let terminal: Terminal
     private let delegate: NoopDelegate
     private var palette = TerminalPalette.standard
-    /// Shadows SwiftTerm's `yBase` (the bottom scroll bound), which isn't public:
-    /// the display offset of the live, newest screen. Re-anchored by `syncLiveBottom`
-    /// after anything that can move yBase.
+    /// Shadows SwiftTerm's `yBase` (the bottom scroll bound, not public): the
+    /// display offset of the live, newest screen. Re-anchored from yDisp on output.
     private var liveBottom = 0
+    /// Whether the user scrolled up from the live bottom. Tracked explicitly, not
+    /// derived from `yDisp < liveBottom`: deriving it meant a drifted liveBottom
+    /// (after a silent yBase move) could wedge the view as permanently scrolled
+    /// back, which broke the cursor and the screen after a resize/clear.
+    private var userScrolledBack = false
 
     public init(columns: Int = 80, rows: Int = 24) {
         delegate = NoopDelegate()
@@ -26,9 +30,14 @@ public final class TerminalEmulator {
 
     /// Feeds raw output bytes into the parser, updating the grid.
     public func feed(_ data: Data) {
-        let wasAtBottom = !isScrolledBack
         terminal.feed(byteArray: [UInt8](data))
-        syncLiveBottom(wasAtBottom: wasAtBottom)
+        // Output returns to the live bottom: SwiftTerm pins yDisp to yBase on
+        // output (it never sees a user scroll), so yDisp is now the true bottom.
+        // Re-anchor to it — this self-heals liveBottom after any silent yBase move
+        // (clear-scrollback ED 3, resize, alt-screen) and matches "output scrolls
+        // to the bottom".
+        liveBottom = terminal.buffer.yDisp
+        userScrolledBack = false
     }
 
     /// The visible text of a row (0 = top of the visible area), trailing
@@ -72,28 +81,21 @@ public final class TerminalEmulator {
 
     /// Scrolls the viewport by `lines` (positive = toward older output).
     public func scroll(lines: Int) {
-        terminal.buffer.yDisp = max(0, min(liveBottom, terminal.buffer.yDisp - lines))
+        let target = max(0, min(liveBottom, terminal.buffer.yDisp - lines))
+        terminal.buffer.yDisp = target
+        userScrolledBack = target < liveBottom
     }
 
     /// Jumps the viewport back to the live (newest) output.
     public func scrollToBottom() {
         terminal.buffer.yDisp = liveBottom
+        userScrolledBack = false
     }
 
     /// Whether the viewport is scrolled away from the live bottom. The alternate
     /// screen never scrolls back, so only the normal buffer can be.
     public var isScrolledBack: Bool {
-        !terminal.isCurrentBufferAlternate && terminal.buffer.yDisp < liveBottom
-    }
-
-    /// Re-anchors `liveBottom` after an operation that can move SwiftTerm's yBase
-    /// (feeding output, resizing). yBase isn't public, so we shadow it: if we were
-    /// at the live bottom, we still are, so liveBottom follows the new yDisp. This
-    /// keeps isScrolledBack/scrollToBottom correct even after moves with no scroll
-    /// event — clear-scrollback (ED 3, sent by `clear`) and alt-screen switches.
-    /// While scrolled back, leave it alone so the saved position sticks.
-    private func syncLiveBottom(wasAtBottom: Bool) {
-        if wasAtBottom { liveBottom = terminal.buffer.yDisp }
+        !terminal.isCurrentBufferAlternate && userScrolledBack
     }
 
     /// Sets the default foreground/background colors (the theme). ANSI-colored
@@ -104,9 +106,11 @@ public final class TerminalEmulator {
 
     /// Resizes the grid to the given dimensions (SwiftTerm reflows the buffer).
     public func resize(columns: Int, rows: Int) {
-        let wasAtBottom = !isScrolledBack
+        let wasScrolledBack = userScrolledBack
         terminal.resize(cols: columns, rows: rows)
-        syncLiveBottom(wasAtBottom: wasAtBottom)
+        // A resize while following the live output keeps us there; re-anchor.
+        // (If scrolled back, the next output re-anchors — see feed.)
+        if !wasScrolledBack { liveBottom = terminal.buffer.yDisp }
     }
 
     /// The fully-resolved cell at the given position (row 0 / col 0 = top-left
