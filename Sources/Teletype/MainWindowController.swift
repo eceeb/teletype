@@ -97,12 +97,28 @@ final class MainWindowController: NSWindowController, NSWindowDelegate {
         }
         tab.onTitleChanged = { [weak self] in self?.refreshTabBar() }
         tab.onPaneFocused = { [weak self] pane in self?.recordPaneFocus(pane) }
+        tab.onPaneClosed = { [weak self, weak tab] in
+            if let tab { self?.paneClosed(in: tab) }
+        }
     }
 
     /// Moves a pane to the front of the focus-MRU list.
     private func recordPaneFocus(_ pane: TerminalPane) {
         paneMRU.removeAll { $0 === pane }
         paneMRU.insert(pane, at: 0)
+    }
+
+    /// A pane closed while its tab survived (⌘W, or a shell exiting on its own).
+    /// Refocus the most-recently-used surviving pane of the active tab so the
+    /// cursor doesn't vanish, then refresh the sidebar. The closed pane is already
+    /// gone from `tab.panes`, so the MRU lookup skips it.
+    private func paneClosed(in tab: TerminalTab) {
+        if tab === activeTab {
+            showActiveTab()
+            let next = paneMRU.first { p in tab.panes.contains { $0 === p } } ?? tab.panes.first
+            if let next { window?.makeFirstResponder(next.view) }
+        }
+        refreshTabBar()
     }
 
     /// Recreates the saved session, or opens one fresh tab if there's nothing to restore.
@@ -221,15 +237,9 @@ final class MainWindowController: NSWindowController, NSWindowDelegate {
 
     @objc func closeActivePane(_ sender: Any?) {
         guard let tab = activeTab, let active = tab.activePane(for: window?.firstResponder) else { return }
-        tab.close(pane: active)   // last pane → tab.onEmpty → removeTab
-        paneMRU.removeAll { $0 === active }
-        if tabs.contains(where: { $0 === tab }) {   // tab survived (had a split)
-            showActiveTab()
-            // Focus the previously active pane in this tab (MRU), else any pane.
-            let next = paneMRU.first { p in tab.panes.contains { $0 === p } } ?? tab.panes.first
-            if let next { window?.makeFirstResponder(next.view) }
-        }
-        refreshTabBar()
+        // Routes through the same callbacks as a shell exiting: a surviving tab
+        // fires onPaneClosed (refocus + refresh), the last pane fires onEmpty (drop).
+        tab.close(pane: active)
     }
 
     @objc func splitRight(_ sender: Any?) { splitActivePane(vertical: true) }

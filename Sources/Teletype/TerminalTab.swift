@@ -20,6 +20,10 @@ final class TerminalTab {
 
     /// Called when the tab's last pane has closed, so the owner can drop the tab.
     var onEmpty: (() -> Void)?
+    /// Called when a pane closed but the tab survived (a split remains), so the
+    /// owner can move focus to another pane and refresh the sidebar. Fires for
+    /// both closing paths — Close Pane (⌘W) and a shell exiting on its own.
+    var onPaneClosed: (() -> Void)?
     /// Called when a pane's title or working directory changes (refresh the bar).
     var onTitleChanged: (() -> Void)?
     /// Called when one of this tab's panes gains focus (for pane MRU).
@@ -142,6 +146,7 @@ final class TerminalTab {
             }
         }
         relayout()
+        onPaneClosed?()
     }
 
     func terminateAll() {
