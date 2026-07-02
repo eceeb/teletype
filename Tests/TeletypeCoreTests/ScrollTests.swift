@@ -55,4 +55,37 @@ struct ScrollTests {
         let cursor = term.cursorPosition
         #expect(term.line(cursor.row).hasPrefix("PROMPT>"))
     }
+
+    /// A resize (window resize, or switching to a pane with a different row count)
+    /// reflows the buffer and moves yBase without a scroll event. The live bottom
+    /// must follow, or afterwards the view is wrongly "scrolled back" and typing
+    /// jumps the viewport away from the cursor.
+    @Test func cursorStaysAlignedAfterResize() {
+        let term = TerminalEmulator(columns: 40, rows: 5)
+        func feed(_ s: String) { term.feed(Data(s.utf8)) }
+
+        for i in 1...60 { feed("line \(i)\r\n") }    // scrollback, sitting at the bottom
+        feed("PROMPT>")
+        term.resize(columns: 40, rows: 12)           // e.g. switch to a taller pane
+        term.scrollToBottom()                        // the view does this on typing
+
+        #expect(term.isScrolledBack == false)
+        let cursor = term.cursorPosition
+        #expect(term.line(cursor.row).hasPrefix("PROMPT>"))
+    }
+
+    /// Even if the live bottom drifts (a resize while scrolled back moves yBase
+    /// with no scroll event), following output must re-anchor it — the view can't
+    /// stay permanently wedged as "scrolled back".
+    @Test func liveBottomRecoversAfterDriftingViaOutput() {
+        let term = TerminalEmulator(columns: 40, rows: 5)
+        func feed(_ s: String) { term.feed(Data(s.utf8)) }
+        for i in 1...60 { feed("line \(i)\r\n") }
+        term.scroll(lines: 40)                 // user scrolls back
+        term.resize(columns: 40, rows: 15)     // resize while scrolled back → drift
+        for i in 1...20 { feed("out \(i)\r\n") }   // more output re-anchors it
+        feed("PROMPT>")
+        #expect(!term.isScrolledBack)
+        #expect(term.line(term.cursorPosition.row).hasPrefix("PROMPT>"))
+    }
 }
