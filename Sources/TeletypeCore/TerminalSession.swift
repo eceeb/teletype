@@ -19,8 +19,8 @@ public final class TerminalSession {
     /// Called once the shell has exited (PTY reached end-of-file).
     public var onExit: (() -> Void)?
 
-    public init(columns: Int = 80, rows: Int = 24) {
-        emulator = TerminalEmulator(columns: columns, rows: rows)
+    public init(columns: Int = 80, rows: Int = 24, scrollback: Int = 10_000) {
+        emulator = TerminalEmulator(columns: columns, rows: rows, scrollback: scrollback)
         // Terminal replies (cursor-position reports, device attributes, …) are
         // sent back to the program as input — curses apps need these answers.
         emulator.onRespond = { [weak self] data in self?.write(data) }

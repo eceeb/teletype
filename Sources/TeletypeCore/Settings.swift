@@ -54,6 +54,13 @@ public final class TerminalSettings: @unchecked Sendable {
         set { defaults.set(newValue, forKey: Key.scrollSpeed) }
     }
 
+    /// Lines of scrollback each pane keeps (default 10_000; SwiftTerm's own
+    /// default is only 500). Higher keeps more history but costs more memory.
+    public var scrollbackLines: Int {
+        get { defaults.object(forKey: Key.scrollbackLines) as? Int ?? 10_000 }
+        set { defaults.set(newValue, forKey: Key.scrollbackLines) }
+    }
+
     /// Path or name of the `claude` binary; nil/empty → auto-detect on PATH.
     public var claudeCommand: String? {
         get { defaults.string(forKey: Key.claudeCommand) }
@@ -80,6 +87,7 @@ public final class TerminalSettings: @unchecked Sendable {
         static let newTabDirectory = "newTabDirectory"
         static let themeName = "themeName"
         static let scrollSpeed = "scrollSpeed"
+        static let scrollbackLines = "scrollbackLines"
         static let claudeCommand = "claudeCommand"
     }
 }
