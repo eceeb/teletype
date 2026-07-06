@@ -20,12 +20,17 @@ public final class TerminalEmulator {
     /// back, which broke the cursor and the screen after a resize/clear.
     private var userScrolledBack = false
 
-    public init(columns: Int = 80, rows: Int = 24) {
+    public init(columns: Int = 80, rows: Int = 24, scrollback: Int = 10_000) {
         delegate = NoopDelegate()
-        terminal = Terminal(delegate: delegate)
+        terminal = Terminal(delegate: delegate, options: TerminalOptions(scrollback: max(0, scrollback)))
         terminal.resize(cols: columns, rows: rows)
         // Forward terminal→program replies to the PTY.
         delegate.onSend = { [weak self] data in self?.onRespond?(Data(data)) }
+    }
+
+    /// Changes how many scrollback lines are kept, applied live to this pane.
+    public func setScrollback(_ lines: Int) {
+        terminal.changeScrollback(max(0, lines))
     }
 
     /// Feeds raw output bytes into the parser, updating the grid.

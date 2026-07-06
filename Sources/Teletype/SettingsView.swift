@@ -7,6 +7,7 @@ struct SettingsView: View {
     @State private var fontSize = AppSettings.store.fontSize
     @State private var themeName = AppSettings.store.themeName ?? ""
     @State private var scrollSpeed = AppSettings.store.scrollSpeed
+    @State private var scrollbackLines = AppSettings.store.scrollbackLines
     @State private var background = Color(nsColor: NSColor(AppSettings.store.backgroundColor))
     @State private var foreground = Color(nsColor: NSColor(AppSettings.store.foregroundColor))
     @State private var shell = AppSettings.store.shell ?? ""
@@ -29,6 +30,17 @@ struct SettingsView: View {
                 Text(String(format: "%.1f×", scrollSpeed))
                     .monospacedDigit()
                     .frame(width: 44, alignment: .trailing)
+            }
+            HStack {
+                Text("Scrollback")
+                Picker("", selection: $scrollbackLines) {
+                    Text("1,000 lines").tag(1_000)
+                    Text("10,000 lines").tag(10_000)
+                    Text("50,000 lines").tag(50_000)
+                    Text("100,000 lines").tag(100_000)
+                    Text("200,000 lines").tag(200_000)
+                }
+                .labelsHidden()
             }
             HStack {
                 Text("Theme")
@@ -94,6 +106,10 @@ struct SettingsView: View {
         }
         .onChange(of: scrollSpeed) { _, value in
             AppSettings.store.scrollSpeed = value   // scrollWheel reads this live
+        }
+        .onChange(of: scrollbackLines) { _, value in
+            AppSettings.store.scrollbackLines = value
+            AppSettings.notifyChanged()             // panes re-apply the new size live
         }
         .onChange(of: claudeCmd) { _, value in
             AppSettings.store.claudeCommand = value.isEmpty ? nil : value

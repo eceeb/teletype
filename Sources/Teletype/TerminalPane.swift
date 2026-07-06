@@ -69,7 +69,7 @@ final class TerminalPane {
 
     init() {
         let settings = AppSettings.store
-        let session = TerminalSession(columns: 80, rows: 24)
+        let session = TerminalSession(columns: 80, rows: 24, scrollback: settings.scrollbackLines)
         session.emulator.setColors(background: settings.backgroundColor,
                                    foreground: settings.foregroundColor,
                                    ansi16: ColorTheme.named(settings.themeName)?.ansi)
@@ -158,5 +158,6 @@ final class TerminalPane {
         view.applyAppearance(fontSize: CGFloat(settings.fontSize),
                              background: NSColor(settings.backgroundColor),
                              foreground: NSColor(settings.foregroundColor))
+        session.emulator.setScrollback(settings.scrollbackLines)
     }
 }
