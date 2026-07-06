@@ -88,4 +88,17 @@ struct ScrollTests {
         #expect(!term.isScrolledBack)
         #expect(term.line(term.cursorPosition.row).hasPrefix("PROMPT>"))
     }
+
+    /// The configured scrollback size is honored: a tiny history drops old lines,
+    /// a large one keeps them (SwiftTerm's own default of 500 is easy to exceed).
+    @Test func scrollbackSizeIsHonored() {
+        func oldestLine(scrollback: Int) -> String {
+            let term = TerminalEmulator(columns: 20, rows: 5, scrollback: scrollback)
+            for i in 0..<300 { term.feed(Data("line\(i)\r\n".utf8)) }
+            term.scroll(lines: 1_000_000)          // jump to the very top
+            return term.line(0)
+        }
+        #expect(oldestLine(scrollback: 10) != "line0")      // line0 fell out of a 10-line history
+        #expect(oldestLine(scrollback: 10_000) == "line0")  // 10k keeps all 300
+    }
 }
