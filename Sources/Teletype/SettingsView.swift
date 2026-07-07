@@ -14,6 +14,7 @@ struct SettingsView: View {
     @State private var newTabDir = AppSettings.store.newTabDirectory ?? ""
     @State private var claudeCmd = AppSettings.store.claudeCommand ?? ""
     @State private var tabsOnLeft = (AppSettings.store.tabPlacement == "left")
+    @State private var appIcon = AppSettings.store.appIconName ?? AppIconCatalog.defaultID
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -73,6 +74,21 @@ struct SettingsView: View {
                 .pickerStyle(.segmented)
                 .labelsHidden()
             }
+            HStack {
+                Text("App icon")
+                Picker("", selection: $appIcon) {
+                    ForEach(AppIconCatalog.all, id: \.id) { icon in
+                        HStack {
+                            if let image = AppIconCatalog.image(id: icon.id) {
+                                Image(nsImage: image).resizable().frame(width: 18, height: 18)
+                            }
+                            Text(icon.label)
+                        }
+                        .tag(icon.id)
+                    }
+                }
+                .labelsHidden()
+            }
             Divider()
             Button("Keyboard Shortcuts…") {
                 NSApp.sendAction(#selector(AppDelegate.openShortcuts(_:)), to: nil, from: nil)
@@ -110,6 +126,10 @@ struct SettingsView: View {
         .onChange(of: scrollbackLines) { _, value in
             AppSettings.store.scrollbackLines = value
             AppSettings.notifyChanged()             // panes re-apply the new size live
+        }
+        .onChange(of: appIcon) { _, value in
+            AppSettings.store.appIconName = value
+            AppIconCatalog.applyFromSettings()      // swap the Dock icon immediately
         }
         .onChange(of: claudeCmd) { _, value in
             AppSettings.store.claudeCommand = value.isEmpty ? nil : value

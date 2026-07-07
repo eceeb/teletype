@@ -67,6 +67,12 @@ public final class TerminalSettings: @unchecked Sendable {
         set { defaults.set(newValue, forKey: Key.claudeCommand) }
     }
 
+    /// Selected app-icon id (a name from the icon catalog); nil → the default.
+    public var appIconName: String? {
+        get { defaults.string(forKey: Key.appIconName) }
+        set { defaults.set(newValue, forKey: Key.appIconName) }
+    }
+
     private func color(forKey key: String) -> TermColor? {
         guard let rgb = defaults.array(forKey: key) as? [Int], rgb.count == 3 else { return nil }
         return TermColor(red: UInt8(clamping: rgb[0]),
@@ -89,5 +95,6 @@ public final class TerminalSettings: @unchecked Sendable {
         static let scrollSpeed = "scrollSpeed"
         static let scrollbackLines = "scrollbackLines"
         static let claudeCommand = "claudeCommand"
+        static let appIconName = "appIconName"
     }
 }
