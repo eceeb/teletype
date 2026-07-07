@@ -74,20 +74,25 @@ struct SettingsView: View {
                 .pickerStyle(.segmented)
                 .labelsHidden()
             }
-            HStack {
+            VStack(alignment: .leading, spacing: 6) {
                 Text("App icon")
-                Picker("", selection: $appIcon) {
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 46), spacing: 8)], spacing: 8) {
                     ForEach(AppIconCatalog.all, id: \.id) { icon in
-                        HStack {
-                            if let image = AppIconCatalog.image(id: icon.id) {
-                                Image(nsImage: image).resizable().frame(width: 18, height: 18)
-                            }
-                            Text(icon.label)
+                        if let image = AppIconCatalog.image(id: icon.id) {
+                            Image(nsImage: image)
+                                .resizable()
+                                .interpolation(.high)
+                                .frame(width: 44, height: 44)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 10)
+                                        .strokeBorder(appIcon == icon.id ? Color.accentColor : .clear,
+                                                      lineWidth: 3)
+                                )
+                                .help(icon.label)
+                                .onTapGesture { appIcon = icon.id }
                         }
-                        .tag(icon.id)
                     }
                 }
-                .labelsHidden()
             }
             Divider()
             Button("Keyboard Shortcuts…") {
