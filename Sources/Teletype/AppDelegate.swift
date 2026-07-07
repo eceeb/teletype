@@ -11,6 +11,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         // Stop macOS from injecting Dictation / Emoji & Symbols into the Edit menu.
         UserDefaults.standard.set(true, forKey: "NSDisabledDictationMenuItem")
         UserDefaults.standard.set(true, forKey: "NSDisabledCharacterPaletteMenuItem")
+        AppIconCatalog.applyFromSettings()   // Dock icon the user picked in Settings
         setupMainMenu()
         let controller = MainWindowController()
         controller.showWindow(nil)
