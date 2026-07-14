@@ -200,6 +200,12 @@ final class TerminalView: NSView {
     private func reportGridSizeIfChanged() {
         let cols = max(1, Int((bounds.width - 2 * padding) / cellWidth))
         let rows = max(1, Int((bounds.height - 2 * padding) / cellHeight))
+        // While splits are being arranged a pane briefly has a near-zero frame.
+        // Don't resize the PTY down to a sliver there — a program running at shell
+        // startup would wrap its output to 1-2 columns and stay wrapped. Wait until
+        // the view is really laid out (in a window, at a usable size); the PTY keeps
+        // its sane startup size (see TerminalSession.start) until then.
+        guard window != nil, cols >= 10, rows >= 4 else { return }
         guard lastGridSize?.cols != cols || lastGridSize?.rows != rows else { return }
         lastGridSize = (cols, rows)
         onResize?(cols, rows)
