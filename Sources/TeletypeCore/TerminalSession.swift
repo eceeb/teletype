@@ -35,6 +35,11 @@ public final class TerminalSession {
     ) throws {
         try pty.start(executable: executable, arguments: arguments,
                       environment: environment, workingDirectory: workingDirectory)
+        // Give the PTY a sane size up front (matching the emulator's default grid)
+        // so a program that runs at shell startup — e.g. a login-time prompt —
+        // sees a real width. Otherwise it starts at the kernel default of 0×0 and
+        // its output wraps to a sliver until the view reports its real size.
+        pty.setWindowSize(columns: emulator.columns, rows: emulator.rows)
 
         let source = DispatchSource.makeReadSource(fileDescriptor: pty.masterFD, queue: .main)
         source.setEventHandler { [weak self] in
