@@ -197,15 +197,25 @@ final class TerminalView: NSView {
         reportGridSizeIfChanged()
     }
 
+    // The pane is often sized before it's inserted into the window (session
+    // restore builds the split tree first). Report again once it's in, in case
+    // that final size never triggers another setFrameSize.
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        reportGridSizeIfChanged()
+    }
+
     private func reportGridSizeIfChanged() {
         let cols = max(1, Int((bounds.width - 2 * padding) / cellWidth))
         let rows = max(1, Int((bounds.height - 2 * padding) / cellHeight))
-        // While splits are being arranged a pane briefly has a near-zero frame.
-        // Don't resize the PTY down to a sliver there — a program running at shell
-        // startup would wrap its output to 1-2 columns and stay wrapped. Wait until
-        // the view is really laid out (in a window, at a usable size); the PTY keeps
-        // its sane startup size (see TerminalSession.start) until then.
-        guard window != nil, cols >= 10, rows >= 4 else { return }
+        // A pane briefly has a near-zero frame while splits are arranged; don't
+        // resize the PTY to a sliver there (a program running at shell startup
+        // would wrap its output to 1-2 columns and stay wrapped). A usable size
+        // gates that. NB: don't also require `window != nil` — the real size is
+        // often set before the view is in the window, and skipping it then left
+        // the grid stuck at the 80x24 default (cursor frozen mid-pane), because no
+        // later setFrameSize re-reported it.
+        guard cols >= 10, rows >= 4 else { return }
         guard lastGridSize?.cols != cols || lastGridSize?.rows != rows else { return }
         lastGridSize = (cols, rows)
         onResize?(cols, rows)
