@@ -38,6 +38,7 @@ final class MainWindowController: NSWindowController, NSWindowDelegate {
         tabBar.onSelect = { [weak self] index in self?.selectPaneRow(index) }
         tabBar.onNew = { [weak self] in self?.newTab() }
         tabBar.onRenameGroup = { [weak self] groupIndex, name in self?.renameGroup(groupIndex, to: name) }
+        applySidebarAppearance()
 
         // Restore saved frame (or center on first run) and keep it saved.
         let autosave = NSWindow.FrameAutosaveName("TeletypeMainWindow")
@@ -47,7 +48,10 @@ final class MainWindowController: NSWindowController, NSWindowDelegate {
         settingsObserver = NotificationCenter.default.addObserver(
             forName: AppSettings.didChange, object: nil, queue: .main
         ) { [weak self] _ in
-            MainActor.assumeIsolated { self?.rootView.placement = self?.placementFromSettings() ?? .top }
+            MainActor.assumeIsolated {
+                self?.rootView.placement = self?.placementFromSettings() ?? .top
+                self?.applySidebarAppearance()
+            }
         }
 
         // Poll for working-directory changes so tab titles stay current.
@@ -66,6 +70,17 @@ final class MainWindowController: NSWindowController, NSWindowDelegate {
 
     private func placementFromSettings() -> TabPlacement {
         AppSettings.store.tabPlacement == "left" ? .left : .top
+    }
+
+    /// Pushes the chosen sidebar color (and a contrasting text color) to the bar.
+    private func applySidebarAppearance() {
+        guard let color = AppSettings.store.sidebarColor else {
+            tabBar.applyColors(background: nil, foreground: nil)   // system default
+            return
+        }
+        // Perceived luminance → pick white text on dark backgrounds, black on light.
+        let luminance = 0.299 * Double(color.red) + 0.587 * Double(color.green) + 0.114 * Double(color.blue)
+        tabBar.applyColors(background: NSColor(color), foreground: luminance < 140 ? .white : .black)
     }
 
     // MARK: - Tabs
