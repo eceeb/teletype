@@ -10,6 +10,8 @@ struct SettingsView: View {
     @State private var scrollbackLines = AppSettings.store.scrollbackLines
     @State private var background = Color(nsColor: NSColor(AppSettings.store.backgroundColor))
     @State private var foreground = Color(nsColor: NSColor(AppSettings.store.foregroundColor))
+    @State private var sidebarColor = AppSettings.store.sidebarColor
+        .map { Color(nsColor: NSColor($0)) } ?? Color(nsColor: .windowBackgroundColor)
     @State private var shell = AppSettings.store.shell ?? ""
     @State private var newTabDir = AppSettings.store.newTabDirectory ?? ""
     @State private var claudeCmd = AppSettings.store.claudeCommand ?? ""
@@ -53,6 +55,7 @@ struct SettingsView: View {
             }
             ColorPicker("Background", selection: $background, supportsOpacity: false)
             ColorPicker("Text", selection: $foreground, supportsOpacity: false)
+            ColorPicker("Sidebar", selection: $sidebarColor, supportsOpacity: false)
             HStack {
                 Text("Shell")
                 TextField("$SHELL (default)", text: $shell)
@@ -135,6 +138,10 @@ struct SettingsView: View {
         .onChange(of: appIcon) { _, value in
             AppSettings.store.appIconName = value
             AppIconCatalog.applyFromSettings()      // swap the Dock icon immediately
+        }
+        .onChange(of: sidebarColor) { _, value in
+            AppSettings.store.sidebarColor = TermColor(NSColor(value))
+            AppSettings.notifyChanged()             // sidebar recolors live
         }
         .onChange(of: claudeCmd) { _, value in
             AppSettings.store.claudeCommand = value.isEmpty ? nil : value
