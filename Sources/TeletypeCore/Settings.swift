@@ -73,6 +73,15 @@ public final class TerminalSettings: @unchecked Sendable {
         set { defaults.set(newValue, forKey: Key.appIconName) }
     }
 
+    /// Sidebar background color; nil → the system window background (default).
+    public var sidebarColor: TermColor? {
+        get { color(forKey: Key.sidebarColor) }
+        set {
+            if let newValue { setColor(newValue, forKey: Key.sidebarColor) }
+            else { defaults.removeObject(forKey: Key.sidebarColor) }
+        }
+    }
+
     private func color(forKey key: String) -> TermColor? {
         guard let rgb = defaults.array(forKey: key) as? [Int], rgb.count == 3 else { return nil }
         return TermColor(red: UInt8(clamping: rgb[0]),
@@ -96,5 +105,6 @@ public final class TerminalSettings: @unchecked Sendable {
         static let scrollbackLines = "scrollbackLines"
         static let claudeCommand = "claudeCommand"
         static let appIconName = "appIconName"
+        static let sidebarColor = "sidebarColor"
     }
 }

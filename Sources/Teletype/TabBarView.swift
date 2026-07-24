@@ -21,7 +21,9 @@ struct TabItem {
 final class TabRowView: NSView {
     var onClick: (() -> Void)?
 
-    init(item: TabItem, isActive: Bool) {
+    /// `foreground` is the non-active text color for the current sidebar
+    /// background (nil = the system label color).
+    init(item: TabItem, isActive: Bool, foreground: NSColor?) {
         super.init(frame: .zero)
         wantsLayer = true
         layer?.cornerRadius = 6
@@ -33,7 +35,7 @@ final class TabRowView: NSView {
 
         let titleLabel = NSTextField(labelWithString: item.title.isEmpty ? "Shell" : item.title)
         titleLabel.font = .systemFont(ofSize: 12, weight: .medium)
-        titleLabel.textColor = isActive ? .white : .labelColor
+        titleLabel.textColor = isActive ? .white : (foreground ?? .labelColor)
         titleLabel.lineBreakMode = .byTruncatingTail
         titleLabel.translatesAutoresizingMaskIntoConstraints = false
         addSubview(titleLabel)
@@ -47,7 +49,9 @@ final class TabRowView: NSView {
             titleLabel.topAnchor.constraint(equalTo: topAnchor, constant: 5).isActive = true
             let subtitleLabel = NSTextField(labelWithString: subtitle)
             subtitleLabel.font = .systemFont(ofSize: 10, weight: .regular)
-            subtitleLabel.textColor = isActive ? NSColor.white.withAlphaComponent(0.8) : .secondaryLabelColor
+            subtitleLabel.textColor = isActive
+                ? NSColor.white.withAlphaComponent(0.8)
+                : (foreground?.withAlphaComponent(0.6) ?? .secondaryLabelColor)
             subtitleLabel.lineBreakMode = .byTruncatingTail
             subtitleLabel.translatesAutoresizingMaskIntoConstraints = false
             addSubview(subtitleLabel)
@@ -87,6 +91,18 @@ final class TabBarView: NSView, NSTextFieldDelegate {
     private var headerBoxes: [(rect: NSRect, group: Int)] = []
     private var editField: NSTextField?
     private var editingGroup: Int?
+    /// Custom sidebar colors; nil = system defaults (window background / label).
+    private var sidebarBackground: NSColor?
+    private var sidebarForeground: NSColor?
+
+    /// Sets the sidebar background and its non-active text color (nil = system
+    /// default). Text color is chosen by the caller to contrast the background.
+    func applyColors(background: NSColor?, foreground: NSColor?) {
+        sidebarBackground = background
+        sidebarForeground = foreground
+        layer?.backgroundColor = (background ?? .windowBackgroundColor).cgColor
+        rebuild()   // rows and header pick up the new text color
+    }
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
@@ -128,7 +144,7 @@ final class TabBarView: NSView, NSTextFieldDelegate {
     }
 
     private func makeRow(_ index: Int, _ item: TabItem) -> NSView {
-        let row = TabRowView(item: item, isActive: index == activeIndex)
+        let row = TabRowView(item: item, isActive: index == activeIndex, foreground: sidebarForeground)
         row.onClick = { [weak self] in self?.onSelect?(index) }
         return row
     }
@@ -198,7 +214,7 @@ final class TabBarView: NSView, NSTextFieldDelegate {
             if let label {
                 let attributes: [NSAttributedString.Key: Any] = [
                     .font: NSFont.systemFont(ofSize: 11, weight: .bold),
-                    .foregroundColor: NSColor.labelColor
+                    .foregroundColor: sidebarForeground ?? NSColor.labelColor
                 ]
                 (label as NSString).draw(at: NSPoint(x: 14, y: top + 3), withAttributes: attributes)
                 headerBoxes.append((NSRect(x: box.minX, y: top, width: box.width, height: headerSpace), group))
