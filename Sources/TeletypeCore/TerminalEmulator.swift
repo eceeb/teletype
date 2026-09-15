@@ -103,6 +103,11 @@ public final class TerminalEmulator {
         !terminal.isCurrentBufferAlternate && userScrolledBack
     }
 
+    /// Where the viewport sits in the buffer. A visible row `r` is buffer row
+    /// `r + scrollOffset`; the view anchors selections that way so they stay on
+    /// the same text while it scrolls.
+    public var scrollOffset: Int { terminal.buffer.yDisp }
+
     /// Sets the default foreground/background colors (the theme). ANSI-colored
     /// text keeps its own colors.
     public func setColors(background: TermColor, foreground: TermColor, ansi16: [TermColor]? = nil) {
@@ -159,6 +164,36 @@ public final class TerminalEmulator {
             if fromColumn <= toColumn {
                 for column in fromColumn...toColumn {
                     rowText.append(cell(row: row, col: column)?.character ?? " ")
+                }
+            }
+            while rowText.hasSuffix(" ") { rowText.removeLast() }
+            result.append(rowText)
+        }
+        return result.joined(separator: "\n")
+    }
+
+    /// Like `text(from:to:)`, but rows are buffer-absolute (a visible row plus
+    /// `scrollOffset`). Needed for a selection made while scrolling: parts of it
+    /// are off-screen, and the viewport-relative version would clip them.
+    public func text(fromAbsolute a: GridPosition, toAbsolute b: GridPosition) -> String {
+        let (start, end) = a <= b ? (a, b) : (b, a)
+        let firstRow = max(0, start.row)
+        guard firstRow <= end.row else { return "" }
+
+        // SwiftTerm only exposes cells through the viewport, so walk the rows by
+        // parking the viewport on each one. Restored before returning.
+        let savedOffset = terminal.buffer.yDisp
+        defer { terminal.buffer.yDisp = savedOffset }
+
+        var result: [String] = []
+        for absoluteRow in firstRow...end.row {
+            terminal.buffer.yDisp = absoluteRow       // row now sits at visible row 0
+            let fromColumn = (absoluteRow == start.row) ? max(0, start.column) : 0
+            let toColumn = (absoluteRow == end.row) ? min(columns - 1, end.column) : (columns - 1)
+            var rowText = ""
+            if fromColumn <= toColumn {
+                for column in fromColumn...toColumn {
+                    rowText.append(cell(row: 0, col: column)?.character ?? " ")
                 }
             }
             while rowText.hasSuffix(" ") { rowText.removeLast() }
