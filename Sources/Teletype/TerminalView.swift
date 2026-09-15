@@ -22,8 +22,14 @@ final class TerminalView: NSView {
     /// Called when this pane becomes the first responder (gains focus).
     var onFocus: (() -> Void)?
     private var lastGridSize: (cols: Int, rows: Int)?
+    /// Selection anchors are buffer-absolute (visible row + `emulator.scrollOffset`),
+    /// not visible rows — otherwise they'd stay put while the text scrolled under
+    /// them, and a selection made while scrolling would drift off its text.
     private var selectionStart: GridPosition?
     private var selectionEnd: GridPosition?
+    /// True between mouseDown and mouseUp, so scrolling mid-drag keeps extending
+    /// the selection instead of just moving the viewport.
+    private var isSelecting = false
     private var scrollAccumulator = ScrollAccumulator()
 
     init(emulator: TerminalEmulator, fontSize: CGFloat = 13, background: NSColor = .black, foreground: NSColor = .white) {
@@ -114,29 +120,31 @@ final class TerminalView: NSView {
 
     override func mouseDown(with event: NSEvent) {
         window?.makeFirstResponder(self)   // clicking a pane focuses it
+        isSelecting = true
         let position = gridPosition(at: convert(event.locationInWindow, from: nil))
         switch event.clickCount {
         case 2:   // double-click selects the word
             let (start, end) = emulator.wordRange(at: position)
-            selectionStart = start
-            selectionEnd = end
+            selectionStart = absolute(start)
+            selectionEnd = absolute(end)
         case 3:   // triple-click selects the line
             let (start, end) = emulator.lineRange(atRow: position.row)
-            selectionStart = start
-            selectionEnd = end
+            selectionStart = absolute(start)
+            selectionEnd = absolute(end)
         default:
-            selectionStart = position
-            selectionEnd = position
+            selectionStart = absolute(position)
+            selectionEnd = absolute(position)
         }
         needsDisplay = true
     }
 
     override func mouseDragged(with event: NSEvent) {
-        selectionEnd = gridPosition(at: convert(event.locationInWindow, from: nil))
+        selectionEnd = absolute(gridPosition(at: convert(event.locationInWindow, from: nil)))
         needsDisplay = true
     }
 
     override func mouseUp(with event: NSEvent) {
+        isSelecting = false
         // A plain single click (no drag, no double/triple) clears the selection.
         if event.clickCount <= 1, selectionStart == selectionEnd {
             selectionStart = nil
@@ -164,13 +172,18 @@ final class TerminalView: NSView {
             cellHeight: Double(cellHeight))
         guard lines != 0 else { return }
         emulator.scroll(lines: lines)   // positive = toward older output
+        // Mid-drag the text under the pointer just changed, so extend the
+        // selection to it — that's what "scroll up while selecting" should do.
+        if isSelecting {
+            selectionEnd = absolute(gridPosition(at: convert(event.locationInWindow, from: nil)))
+        }
         needsDisplay = true
     }
 
     /// Cmd-C: copy the selected text to the clipboard.
     @objc func copy(_ sender: Any?) {
         guard let start = selectionStart, let end = selectionEnd, start != end else { return }
-        let text = emulator.text(from: start, to: end)
+        let text = emulator.text(fromAbsolute: start, toAbsolute: end)
         guard !text.isEmpty else { return }
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(text, forType: .string)
@@ -183,10 +196,16 @@ final class TerminalView: NSView {
                             column: max(0, min(emulator.columns - 1, column)))
     }
 
+    /// A visible-row position translated to the buffer-absolute one the selection
+    /// anchors use, so it survives scrolling.
+    private func absolute(_ position: GridPosition) -> GridPosition {
+        GridPosition(row: position.row + emulator.scrollOffset, column: position.column)
+    }
+
     private func isSelected(row: Int, column: Int) -> Bool {
         guard let s = selectionStart, let e = selectionEnd, s != e else { return false }
         let (start, end) = s <= e ? (s, e) : (e, s)
-        let position = GridPosition(row: row, column: column)
+        let position = GridPosition(row: row + emulator.scrollOffset, column: column)
         return position >= start && position <= end
     }
 

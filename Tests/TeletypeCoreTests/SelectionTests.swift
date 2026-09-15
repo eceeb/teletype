@@ -52,4 +52,25 @@ struct SelectionTextTests {
         #expect(start == GridPosition(row: 0, column: 0))
         #expect(end == GridPosition(row: 0, column: 4))
     }
+
+    /// A selection made while scrolling up spans rows that are no longer on
+    /// screen. Addressed by absolute buffer row, it must still copy in full —
+    /// the viewport-clamped `text(from:to:)` would cut everything off-screen.
+    @Test func absoluteRangeReadsRowsScrolledOutOfView() {
+        let term = TerminalEmulator(columns: 20, rows: 5)
+        for i in 0..<30 { term.feed(Data("line\(i)\r\n".utf8)) }
+        // The viewport shows only the last 5 rows; line0-line2 are in scrollback.
+        let text = term.text(fromAbsolute: GridPosition(row: 0, column: 0),
+                             toAbsolute: GridPosition(row: 2, column: 4))
+        #expect(text == "line0\nline1\nline2")
+    }
+
+    /// scrollOffset is the anchor the view stores selections against.
+    @Test func scrollOffsetTracksTheViewport() {
+        let term = TerminalEmulator(columns: 20, rows: 5)
+        for i in 0..<30 { term.feed(Data("line\(i)\r\n".utf8)) }
+        let atBottom = term.scrollOffset
+        term.scroll(lines: 3)                       // scroll up three lines
+        #expect(term.scrollOffset == atBottom - 3)
+    }
 }
