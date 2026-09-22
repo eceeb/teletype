@@ -1,0 +1,17 @@
+# Dependency updates for a self-built app: no auto-update channel, so let
+# Dependabot open a PR when SwiftTerm releases. SwiftTerm parses the escape
+# sequences coming out of the PTY (i.e. whatever ssh/cat/curl print), so it's
+# the one dependency worth keeping current.
+#
+# Before merging such a PR: run `swift test` — the scroll/selection tests cover
+# the places that reach into SwiftTerm internals (buffer.yDisp), which a release
+# can change without breaking the build.
+version: 2
+updates:
+  - package-ecosystem: "swift"
+    directory: "/"
+    schedule:
+      interval: "monthly"
+    open-pull-requests-limit: 3
+    commit-message:
+      prefix: "deps"
