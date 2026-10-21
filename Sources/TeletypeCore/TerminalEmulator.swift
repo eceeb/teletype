@@ -108,6 +108,15 @@ public final class TerminalEmulator {
     /// the same text while it scrolls.
     public var scrollOffset: Int { terminal.buffer.yDisp }
 
+    /// Whether a full-screen program (pager, editor, htop) owns the screen.
+    /// There is no scrollback there, so the wheel must drive the program.
+    public var isAlternateScreen: Bool { terminal.isCurrentBufferAlternate }
+
+    /// Whether the program enabled bracketed paste (DECSET 2004). Pasted text
+    /// then has to be wrapped so the shell takes it as one literal block
+    /// instead of as keystrokes — otherwise every newline runs immediately.
+    public var bracketedPaste: Bool { terminal.bracketedPasteMode }
+
     /// Sets the default foreground/background colors (the theme). ANSI-colored
     /// text keeps its own colors.
     public func setColors(background: TermColor, foreground: TermColor, ansi16: [TermColor]? = nil) {
