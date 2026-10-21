@@ -113,7 +113,11 @@ final class TerminalView: NSView {
     /// Cmd-V: send the clipboard's text to the shell.
     @objc func paste(_ sender: Any?) {
         guard let string = NSPasteboard.general.string(forType: .string) else { return }
-        onInput?(Data(string.utf8))
+        // When the program asked for bracketed paste, wrap the text so it arrives
+        // as one literal block: a multi-line paste lands in the shell as an
+        // editable buffer instead of every line executing the moment it arrives.
+        let payload = emulator.bracketedPaste ? "\u{1b}[200~\(string)\u{1b}[201~" : string
+        onInput?(Data(payload.utf8))
     }
 
     // MARK: - Mouse selection
@@ -171,6 +175,18 @@ final class TerminalView: NSView {
             speed: AppSettings.store.scrollSpeed,
             cellHeight: Double(cellHeight))
         guard lines != 0 else { return }
+
+        // A full-screen program (less, man, vim, htop) owns the screen and has no
+        // scrollback, so moving the viewport would do nothing at all. Send arrow
+        // keys instead, so the wheel scrolls the program like in any terminal.
+        if emulator.isAlternateScreen {
+            let app = emulator.applicationCursorKeys
+            let key = lines > 0 ? (app ? "\u{1b}OA" : "\u{1b}[A")
+                                : (app ? "\u{1b}OB" : "\u{1b}[B")
+            onInput?(Data(String(repeating: key, count: abs(lines)).utf8))
+            return
+        }
+
         emulator.scroll(lines: lines)   // positive = toward older output
         // Mid-drag the text under the pointer just changed, so extend the
         // selection to it — that's what "scroll up while selecting" should do.
@@ -254,6 +270,10 @@ final class TerminalView: NSView {
             let y1 = (padding + CGFloat(row + 1) * cellHeight).rounded()
             for col in 0..<emulator.columns {
                 guard let cell = emulator.cell(row: row, col: col) else { continue }
+                // The trailing half of a wide glyph (emoji, CJK) is a width-0
+                // placeholder — the wide cell already painted both halves. Filling
+                // it here would repaint background over the glyph's right half.
+                if cell.width == 0 { continue }
                 let span = cell.width == 2 ? 2 : 1
                 let x0 = (padding + CGFloat(col) * cellWidth).rounded()
                 let x1 = (padding + CGFloat(col + span) * cellWidth).rounded()
