@@ -23,6 +23,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         true
     }
 
+    /// ⌘Q doesn't close windows, so `windowWillClose` never runs — without this
+    /// the session saved on quit would be whatever was stored the last time the
+    /// window itself was closed.
+    func applicationWillTerminate(_ notification: Notification) {
+        mainController?.saveSession()
+    }
+
     // MARK: - Claude (resolve, then route into the main window)
 
     @objc func newClaudeTab(_ sender: Any?) {

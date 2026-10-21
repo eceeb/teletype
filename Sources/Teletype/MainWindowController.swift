@@ -90,6 +90,7 @@ final class MainWindowController: NSWindowController, NSWindowDelegate {
         configure(tab)
         tabs.append(tab)
         selectTab(at: tabs.count - 1)
+        saveSession()
     }
 
     /// Where new tabs open: the configured folder (tilde-expanded), else home.
@@ -134,6 +135,7 @@ final class MainWindowController: NSWindowController, NSWindowDelegate {
             if let next { window?.makeFirstResponder(next.view) }
         }
         refreshTabBar()
+        saveSession()
     }
 
     /// Recreates the saved session, or opens one fresh tab if there's nothing to restore.
@@ -151,7 +153,12 @@ final class MainWindowController: NSWindowController, NSWindowDelegate {
         selectTab(at: 0)
     }
 
-    private func saveSession() {
+    /// Writes the current layout. Called on every structural change and on quit,
+    /// so a crash or Force Quit can only lose the newest change, not the session.
+    func saveSession() {
+        // Closing the last pane empties `tabs` on the way out; saving that would
+        // overwrite a good layout with an empty one and restore nothing.
+        guard !tabs.isEmpty else { return }
         SessionPersistence.save(SessionLayout(tabs: tabs.map {
             SavedTab(name: $0.customName, root: $0.layoutNode())
         }))
@@ -265,6 +272,7 @@ final class MainWindowController: NSWindowController, NSWindowDelegate {
         let newPane = tab.split(active, vertical: vertical, executable: executable)
         window?.makeFirstResponder(newPane.view)
         refreshTabBar()
+        saveSession()
     }
 
     @objc func selectLastUsedTab(_ sender: Any?) {
