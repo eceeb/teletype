@@ -84,7 +84,8 @@ final class TerminalView: NSView {
             emulator.scrollToBottom()
             needsDisplay = true
         }
-        if let special = event.specialKey, let sequence = escapeSequence(for: special) {
+        if let special = event.specialKey,
+           let sequence = escapeSequence(for: special, modifiers: event.modifierFlags) {
             onInput?(Data(sequence.utf8))
             return
         }
@@ -92,20 +93,45 @@ final class TerminalView: NSView {
         onInput?(Data(characters.utf8))
     }
 
-    /// Maps arrow/navigation keys to terminal escape sequences. Returns nil for
-    /// keys (Return, Tab, Backspace, …) that already send the correct character.
-    private func escapeSequence(for key: NSEvent.SpecialKey) -> String? {
+    /// Maps arrow/navigation keys to terminal escape sequences, encoding held
+    /// modifiers the way xterm does. Returns nil for keys (Return, Tab, plain
+    /// Backspace, …) that already send the right character themselves.
+    ///
+    /// Note we deliberately do *not* treat Option as Meta for ordinary letters:
+    /// on a German layout Option produces @ | [ ] { } \\ ~, so swallowing it
+    /// would make those untypeable. Word-wise editing is covered here through
+    /// ⌥←/⌥→ and ⌥⌫ instead.
+    private func escapeSequence(for key: NSEvent.SpecialKey,
+                                modifiers: NSEvent.ModifierFlags) -> String? {
+        // xterm modifier encoding: ESC [ 1 ; <n> <letter>, where
+        // n = 1 + shift(1) + option(2) + control(4). Without it ⌥→ and ⌃→ move a
+        // single character instead of a whole word.
+        var code = 1
+        if modifiers.contains(.shift)   { code += 1 }
+        if modifiers.contains(.option)  { code += 2 }
+        if modifiers.contains(.control) { code += 4 }
+        let modified = code > 1
         let app = emulator.applicationCursorKeys
+
+        func cursor(_ letter: String) -> String {
+            if modified { return "\u{1b}[1;\(code)\(letter)" }
+            return app ? "\u{1b}O\(letter)" : "\u{1b}[\(letter)"
+        }
+
         switch key {
-        case .upArrow:       return app ? "\u{1b}OA" : "\u{1b}[A"
-        case .downArrow:     return app ? "\u{1b}OB" : "\u{1b}[B"
-        case .rightArrow:    return app ? "\u{1b}OC" : "\u{1b}[C"
-        case .leftArrow:     return app ? "\u{1b}OD" : "\u{1b}[D"
-        case .home:          return "\u{1b}[H"
-        case .end:           return "\u{1b}[F"
+        case .upArrow:       return cursor("A")
+        case .downArrow:     return cursor("B")
+        case .rightArrow:    return cursor("C")
+        case .leftArrow:     return cursor("D")
+        case .home:          return modified ? "\u{1b}[1;\(code)H" : "\u{1b}[H"
+        case .end:           return modified ? "\u{1b}[1;\(code)F" : "\u{1b}[F"
         case .pageUp:        return "\u{1b}[5~"
         case .pageDown:      return "\u{1b}[6~"
         case .deleteForward: return "\u{1b}[3~"
+        // ⌥⌫ = delete the word before the cursor (ESC + DEL); plain ⌫ falls
+        // through to the character the event already carries.
+        case .delete, .backspace:
+            return modifiers.contains(.option) ? "\u{1b}\u{7f}" : nil
         default:             return nil
         }
     }
