@@ -73,4 +73,24 @@ struct SelectionTextTests {
         term.scroll(lines: 3)                       // scroll up three lines
         #expect(term.scrollOffset == atBottom - 3)
     }
+
+    /// Copying must not insert a space after every wide character: the second
+    /// half of a CJK/emoji glyph is a width-0 placeholder, not a blank.
+    @Test func copySkipsTheSecondHalfOfWideGlyphs() {
+        let term = TerminalEmulator(columns: 20, rows: 5)
+        term.feed(Data("日本".utf8))
+        let text = term.text(from: GridPosition(row: 0, column: 0),
+                             to: GridPosition(row: 0, column: 3))
+        #expect(text == "日本")
+    }
+
+    /// A line that only wrapped because the pane is narrow is still one line —
+    /// copying it must not put a newline in the middle of a command or URL.
+    @Test func copyKeepsASoftWrappedLineInOnePiece() {
+        let term = TerminalEmulator(columns: 10, rows: 5)
+        term.feed(Data("abcdefghijklmno".utf8))     // wraps after column 10
+        let text = term.text(from: GridPosition(row: 0, column: 0),
+                             to: GridPosition(row: 1, column: 4))
+        #expect(text == "abcdefghijklmno")
+    }
 }
