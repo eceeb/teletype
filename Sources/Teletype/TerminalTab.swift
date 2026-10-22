@@ -43,6 +43,7 @@ final class TerminalTab {
         containerView.autoresizingMask = [.width, .height]
         place(buildView(from: node), asChildOf: containerView)
         relayout()
+        evenlyDistribute(containerView)   // a restored tree has no stored ratios yet
     }
 
     private func buildView(from node: PaneNode) -> NSView {
@@ -115,6 +116,7 @@ final class TerminalTab {
         }
 
         relayout()
+        splitEvenly(split)
         // A new split opens in the same directory as the pane it came from.
         newPane.start(executable: executable,
                       workingDirectory: active.session.processWorkingDirectory())
@@ -178,10 +180,20 @@ final class TerminalTab {
         parent.addSubview(view)
     }
 
-    /// Forces layout and evenly distributes every split so nested panes stay visible.
+    /// Forces layout. Deliberately does *not* redistribute dividers: doing that on
+    /// every split/close threw away any ratio the user had dragged. Only a brand
+    /// new split (and a restored tree) gets an even split — see `splitEvenly`.
     private func relayout() {
         containerView.layoutSubtreeIfNeeded()
-        evenlyDistribute(containerView)
+    }
+
+    /// Centers the divider of one freshly created split, so both halves start out
+    /// visible. Siblings keep whatever the user set.
+    private func splitEvenly(_ split: NSSplitView) {
+        split.layoutSubtreeIfNeeded()
+        guard split.arrangedSubviews.count == 2 else { return }
+        let position = split.isVertical ? split.bounds.width / 2 : split.bounds.height / 2
+        split.setPosition(position, ofDividerAt: 0)
     }
 
     private func evenlyDistribute(_ view: NSView) {
