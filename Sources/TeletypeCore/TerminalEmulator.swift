@@ -165,20 +165,45 @@ public final class TerminalEmulator {
         let lastRow = min(rows - 1, end.row)
         guard firstRow <= lastRow else { return "" }
 
-        var result: [String] = []
+        var collected: [(text: String, isContinuation: Bool)] = []
         for row in firstRow...lastRow {
             let fromColumn = (row == start.row) ? max(0, start.column) : 0
             let toColumn = (row == end.row) ? min(columns - 1, end.column) : (columns - 1)
-            var rowText = ""
-            if fromColumn <= toColumn {
-                for column in fromColumn...toColumn {
-                    rowText.append(cell(row: row, col: column)?.character ?? " ")
-                }
-            }
-            while rowText.hasSuffix(" ") { rowText.removeLast() }
-            result.append(rowText)
+            collected.append((rowText(row: row, from: fromColumn, through: toColumn),
+                              terminal.getLine(row: row)?.isWrapped ?? false))
         }
-        return result.joined(separator: "\n")
+        return joined(collected)
+    }
+
+    /// One row's characters, skipping the width-0 placeholder that follows a wide
+    /// glyph — appending it would put a stray space after every emoji/CJK char.
+    private func rowText(row: Int, from fromColumn: Int, through toColumn: Int) -> String {
+        guard fromColumn <= toColumn else { return "" }
+        var text = ""
+        for column in fromColumn...toColumn {
+            guard let cell = cell(row: row, col: column) else { continue }
+            if cell.width == 0 { continue }
+            text.append(cell.character)
+        }
+        return text
+    }
+
+    /// Joins rows, honoring soft wraps: a row flagged `isWrapped` is the
+    /// continuation of the one above, so it must not get a newline — otherwise a
+    /// long command or URL comes back cut in half. Only rows that really end are
+    /// trimmed of trailing blanks.
+    private func joined(_ rows: [(text: String, isContinuation: Bool)]) -> String {
+        var result = ""
+        for (index, row) in rows.enumerated() {
+            var text = row.text
+            let continuesBelow = index + 1 < rows.count && rows[index + 1].isContinuation
+            if !continuesBelow {
+                while text.hasSuffix(" ") { text.removeLast() }
+            }
+            if index > 0, !row.isContinuation { result += "\n" }
+            result += text
+        }
+        return result
     }
 
     /// Like `text(from:to:)`, but rows are buffer-absolute (a visible row plus
@@ -194,21 +219,15 @@ public final class TerminalEmulator {
         let savedOffset = terminal.buffer.yDisp
         defer { terminal.buffer.yDisp = savedOffset }
 
-        var result: [String] = []
+        var collected: [(text: String, isContinuation: Bool)] = []
         for absoluteRow in firstRow...end.row {
             terminal.buffer.yDisp = absoluteRow       // row now sits at visible row 0
             let fromColumn = (absoluteRow == start.row) ? max(0, start.column) : 0
             let toColumn = (absoluteRow == end.row) ? min(columns - 1, end.column) : (columns - 1)
-            var rowText = ""
-            if fromColumn <= toColumn {
-                for column in fromColumn...toColumn {
-                    rowText.append(cell(row: 0, col: column)?.character ?? " ")
-                }
-            }
-            while rowText.hasSuffix(" ") { rowText.removeLast() }
-            result.append(rowText)
+            collected.append((rowText(row: 0, from: fromColumn, through: toColumn),
+                              terminal.getLine(row: 0)?.isWrapped ?? false))
         }
-        return result.joined(separator: "\n")
+        return joined(collected)
     }
 
     /// The word (a run of non-space characters) containing `position`. If the
