@@ -1,6 +1,7 @@
 #include "CPTY.h"
 
 #include <unistd.h>
+#include <signal.h>
 #include <sys/ioctl.h>
 #include <libproc.h>
 #include <sys/proc_info.h>
@@ -12,6 +13,23 @@ pid_t cpty_spawn(int slave_fd, int master_fd, char *const argv[], char *const en
     pid_t pid = fork();
     if (pid == 0) {
         // Child: only async-signal-safe calls until exec.
+
+        // Start from a clean signal state. fork() inherits the parent's blocked
+        // mask, and execve() keeps both that mask and every SIG_IGN disposition
+        // — so without this the shell, and everything the user runs in it,
+        // inherits whatever the app happened to block or ignore. A blocked
+        // SIGTERM in particular would leave terminate()'s signal pending
+        // forever, and the pane's shell would outlive the pane.
+        sigset_t empty;
+        sigemptyset(&empty);
+        sigprocmask(SIG_SETMASK, &empty, NULL);
+        struct sigaction dfl;
+        memset(&dfl, 0, sizeof(dfl));
+        dfl.sa_handler = SIG_DFL;
+        for (int sig = 1; sig < NSIG; sig++) {
+            sigaction(sig, &dfl, NULL);  // SIGKILL/SIGSTOP just fail, harmlessly
+        }
+
         setsid();                       // new session, no controlling tty
         ioctl(slave_fd, TIOCSCTTY, 0);  // make the slave our controlling tty
         dup2(slave_fd, 0);
