@@ -152,6 +152,22 @@ final class TabBarView: NSView, NSTextFieldDelegate {
     @objc private func buttonClicked(_ sender: NSButton) { onSelect?(sender.tag) }
     @objc private func addTab() { onNew?() }
 
+    /// Sizes the bar to its content along the scrolling axis, so the enclosing
+    /// scroll view can actually reach the last rows and the "+" button. Without
+    /// this they were laid out past the window edge and became unclickable once a
+    /// tab had many panes. Across the axis we always match the visible width.
+    private func growToFit(extent: CGFloat) {
+        guard let clip = superview as? NSClipView else { return }
+        let visible = clip.bounds.size
+        let target = placement == .left
+            ? NSSize(width: visible.width, height: max(visible.height, extent))
+            : NSSize(width: max(visible.width, extent), height: visible.height)
+        // Only when it actually changed — setFrameSize re-enters layout().
+        if abs(frame.width - target.width) > 0.5 || abs(frame.height - target.height) > 0.5 {
+            setFrameSize(target)
+        }
+    }
+
     override func layout() {
         super.layout()
         switch placement {
@@ -165,6 +181,7 @@ final class TabBarView: NSView, NSTextFieldDelegate {
                 x += width + 4
             }
             plusButton.frame = NSRect(x: x, y: y, width: 30, height: height)
+            growToFit(extent: x + 30 + 6)
         case .left:
             let baseHeight: CGFloat = 26
             let tallHeight: CGFloat = 42         // taller when a process subtitle shows
@@ -183,6 +200,7 @@ final class TabBarView: NSView, NSTextFieldDelegate {
                 y += rowHeight + 3
             }
             plusButton.frame = NSRect(x: 8, y: y + 6, width: bounds.width - 16, height: 24)
+            growToFit(extent: y + 6 + 24 + 8)
         }
         needsDisplay = true
     }
@@ -294,28 +312,56 @@ final class MainContentView: NSView {
         }
     }
 
+    private let tabScroll = NSScrollView()
+
     init(tabBar: TabBarView) {
         self.tabBar = tabBar
         super.init(frame: .zero)
+        // The bar scrolls: with many panes the rows (and the "+" button) exceed
+        // the window and would otherwise be out of reach.
+        tabScroll.drawsBackground = false
+        tabScroll.autohidesScrollers = true
+        tabScroll.documentView = tabBar
         addSubview(content)
-        addSubview(tabBar)
+        addSubview(tabScroll)
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
     override var isFlipped: Bool { true }
 
+    /// Sizes the bar to its content along the scrolling axis, so the enclosing
+    /// scroll view can actually reach the last rows and the "+" button. Without
+    /// this they were laid out past the window edge and became unclickable once a
+    /// tab had many panes. Across the axis we always match the visible width.
+    private func growToFit(extent: CGFloat) {
+        guard let clip = superview as? NSClipView else { return }
+        let visible = clip.bounds.size
+        let target = placement == .left
+            ? NSSize(width: visible.width, height: max(visible.height, extent))
+            : NSSize(width: max(visible.width, extent), height: visible.height)
+        // Only when it actually changed — setFrameSize re-enters layout().
+        if abs(frame.width - target.width) > 0.5 || abs(frame.height - target.height) > 0.5 {
+            setFrameSize(target)
+        }
+    }
+
     override func layout() {
         super.layout()
         switch placement {
         case .top:
             let barHeight: CGFloat = 36
-            tabBar.frame = NSRect(x: 0, y: 0, width: bounds.width, height: barHeight)
+            tabScroll.hasVerticalScroller = false
+            tabScroll.hasHorizontalScroller = true
+            tabScroll.frame = NSRect(x: 0, y: 0, width: bounds.width, height: barHeight)
             content.frame = NSRect(x: 0, y: barHeight, width: bounds.width, height: max(0, bounds.height - barHeight))
         case .left:
             let barWidth: CGFloat = 200
-            tabBar.frame = NSRect(x: 0, y: 0, width: barWidth, height: bounds.height)
+            tabScroll.hasVerticalScroller = true
+            tabScroll.hasHorizontalScroller = false
+            tabScroll.frame = NSRect(x: 0, y: 0, width: barWidth, height: bounds.height)
             content.frame = NSRect(x: barWidth, y: 0, width: max(0, bounds.width - barWidth), height: bounds.height)
         }
+        tabBar.needsLayout = true
     }
 }
