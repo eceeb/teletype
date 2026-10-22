@@ -174,6 +174,17 @@ final class MainWindowController: NSWindowController, NSWindowDelegate {
         lastBarSignature = ""        // force a rebuild even if the derived label matches
         refreshTabBar()
         saveSession()
+        // The inline editor held focus; without handing it back the window has no
+        // first responder, so typing goes nowhere and activePane(for:) falls back
+        // to the last pane — the next ⌘W would close the wrong one.
+        focusActivePane()
+    }
+
+    /// Puts focus on the most-recently-used pane of the active tab.
+    private func focusActivePane() {
+        guard let tab = activeTab else { return }
+        let pane = paneMRU.first { p in tab.panes.contains { $0 === p } } ?? tab.panes.first
+        if let pane { window?.makeFirstResponder(pane.view) }
     }
 
     func selectTab(at index: Int) {
