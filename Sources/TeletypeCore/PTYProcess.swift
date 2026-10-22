@@ -138,7 +138,17 @@ public final class PTYProcess {
     /// eventually exhausting the system-wide PTY limit (and breaking other apps).
     /// The caller cancels the read source before this, so the fd is unmonitored.
     public func terminate() {
-        if pid > 0 { kill(pid, SIGTERM) }
+        if pid > 0 {
+            let child = pid
+            kill(child, SIGTERM)
+            // Reap it, or every closed pane leaves a zombie for the app's
+            // lifetime. Off the main thread: a shell that ignores SIGTERM would
+            // otherwise block the UI inside waitpid until it finally exits.
+            DispatchQueue.global().async {
+                var status: Int32 = 0
+                waitpid(child, &status, 0)
+            }
+        }
         if masterFD >= 0 {
             close(masterFD)
             masterFD = -1
