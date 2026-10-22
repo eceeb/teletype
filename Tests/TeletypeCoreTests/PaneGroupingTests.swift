@@ -6,7 +6,7 @@ import Testing
         "/Users/dev/code/teletype",
         "/Users/dev/code/teletype/Tests"
     ])
-    #expect(result.header == "e")
+    #expect(result.header == "code")
     #expect(result.labels == ["teletype", "teletype/Tests"])
 }
 
@@ -33,11 +33,11 @@ import Testing
         "/tmp/foo"
     ])
     #expect(result.header == nil)
-    #expect(result.labels == ["e/teletype", "tmp/foo"])
+    #expect(result.labels == ["code/teletype", "tmp/foo"])
 }
 
 @Test func singlePaneHasNoHeader() {
     let result = PaneGrouping.summarize(["/Users/dev/code/teletype"])
     #expect(result.header == nil)
-    #expect(result.labels == ["e/teletype"])
+    #expect(result.labels == ["code/teletype"])
 }
