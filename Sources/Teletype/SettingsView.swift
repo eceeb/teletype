@@ -153,6 +153,14 @@ struct SettingsView: View {
                 AppSettings.store.foregroundColor = theme.foreground
                 background = Color(nsColor: NSColor(theme.background))
                 foreground = Color(nsColor: NSColor(theme.foreground))
+            } else {
+                // "Default" has to restore the built-in colors as well, not just the
+                // ANSI palette — otherwise a light theme's background stays behind
+                // with the dark default palette on top of it.
+                AppSettings.store.backgroundColor = TerminalSettings.defaultBackground
+                AppSettings.store.foregroundColor = TerminalSettings.defaultForeground
+                background = Color(nsColor: NSColor(TerminalSettings.defaultBackground))
+                foreground = Color(nsColor: NSColor(TerminalSettings.defaultForeground))
             }
             AppSettings.notifyChanged()
         }

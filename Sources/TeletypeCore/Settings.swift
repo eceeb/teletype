@@ -14,13 +14,18 @@ public final class TerminalSettings: @unchecked Sendable {
         set { defaults.set(newValue, forKey: Key.fontSize) }
     }
 
+    /// The built-in colors, used when no theme is picked. Exposed so "Default" in
+    /// the theme picker can actually restore them.
+    public static let defaultBackground = TermColor(red: 0, green: 0, blue: 0)
+    public static let defaultForeground = TermColor(red: 229, green: 229, blue: 229)
+
     public var backgroundColor: TermColor {
-        get { color(forKey: Key.background) ?? TermColor(red: 0, green: 0, blue: 0) }
+        get { color(forKey: Key.background) ?? Self.defaultBackground }
         set { setColor(newValue, forKey: Key.background) }
     }
 
     public var foregroundColor: TermColor {
-        get { color(forKey: Key.foreground) ?? TermColor(red: 229, green: 229, blue: 229) }
+        get { color(forKey: Key.foreground) ?? Self.defaultForeground }
         set { setColor(newValue, forKey: Key.foreground) }
     }
 
