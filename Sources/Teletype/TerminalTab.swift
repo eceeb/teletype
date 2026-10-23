@@ -79,8 +79,6 @@ final class TerminalTab {
 
     // MARK: - Active pane / focus
 
-    func firstPaneView() -> NSView? { panes.first?.view }
-
     /// The pane holding (or containing) the given first responder.
     func activePane(for firstResponder: NSResponder?) -> TerminalPane? {
         if let view = firstResponder as? NSView,
