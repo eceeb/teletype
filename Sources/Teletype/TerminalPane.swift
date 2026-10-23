@@ -80,10 +80,8 @@ final class TerminalPane {
         self.session = session
         self.view = view
 
-        session.onUpdate = { [weak view] in
-            view?.clearSelectionForOutput()
-            view?.needsDisplay = true
-        }
+        session.onUpdate = { [weak view] in view?.markDirtyForOutput() }
+        session.emulator.onBufferInvalidated = { [weak view] in view?.clearSelection() }
         session.onExit = { [weak self] in self?.onExit?() }
         view.onInput = { [weak session] data in session?.write(data) }
         view.onResize = { [weak session] cols, rows in session?.resize(columns: cols, rows: rows) }
@@ -107,9 +105,7 @@ final class TerminalPane {
         if (program as NSString).lastPathComponent == "claude" {
             displayName = "Claudette"
         }
-        var environment = ProcessInfo.processInfo.environment
-        environment["TERM"] = "xterm-256color"
-        environment["TERM_PROGRAM"] = "Teletype"   // identify the terminal (like iTerm / Apple Terminal)
+        let environment = ShellEnvironment.make(from: ProcessInfo.processInfo.environment)
         // Launch the default shell as a *login* shell so it sources ~/.zprofile
         // (Homebrew PATH, etc.); a GUI app otherwise starts with a minimal PATH.
         let launchArgs = (executable == nil && arguments.isEmpty) ? ["-l"] : arguments

@@ -31,6 +31,8 @@ final class TerminalView: NSView {
     /// the selection instead of just moving the viewport.
     private var isSelecting = false
     private var scrollAccumulator = ScrollAccumulator()
+    /// Where the cursor was at the last repaint, so the cell it left is cleared.
+    private var lastCursorRow = 0
 
     init(emulator: TerminalEmulator, fontSize: CGFloat = 13, background: NSColor = .black, foreground: NSColor = .white) {
         self.emulator = emulator
@@ -93,47 +95,40 @@ final class TerminalView: NSView {
         onInput?(Data(characters.utf8))
     }
 
-    /// Maps arrow/navigation keys to terminal escape sequences, encoding held
-    /// modifiers the way xterm does. Returns nil for keys (Return, Tab, plain
-    /// Backspace, …) that already send the right character themselves.
-    ///
-    /// Note we deliberately do *not* treat Option as Meta for ordinary letters:
-    /// on a German layout Option produces @ | [ ] { } \\ ~, so swallowing it
-    /// would make those untypeable. Word-wise editing is covered here through
-    /// ⌥←/⌥→ and ⌥⌫ instead.
+    /// Maps an AppKit key event onto the core's key encoder. Returns nil for
+    /// keys that already send the right character themselves.
     private func escapeSequence(for key: NSEvent.SpecialKey,
                                 modifiers: NSEvent.ModifierFlags) -> String? {
-        // xterm modifier encoding: ESC [ 1 ; <n> <letter>, where
-        // n = 1 + shift(1) + option(2) + control(4). Without it ⌥→ and ⌃→ move a
-        // single character instead of a whole word.
-        var code = 1
-        if modifiers.contains(.shift)   { code += 1 }
-        if modifiers.contains(.option)  { code += 2 }
-        if modifiers.contains(.control) { code += 4 }
-        let modified = code > 1
-        let app = emulator.applicationCursorKeys
+        guard let terminalKey = TerminalView.terminalKey(for: key) else { return nil }
+        return TerminalKey.escapeSequence(for: terminalKey,
+                                          modifiers: TerminalView.keyModifiers(for: modifiers),
+                                          applicationCursor: emulator.applicationCursorKeys)
+    }
 
-        func cursor(_ letter: String) -> String {
-            if modified { return "\u{1b}[1;\(code)\(letter)" }
-            return app ? "\u{1b}O\(letter)" : "\u{1b}[\(letter)"
-        }
-
+    private static func terminalKey(for key: NSEvent.SpecialKey) -> TerminalKey? {
         switch key {
-        case .upArrow:       return cursor("A")
-        case .downArrow:     return cursor("B")
-        case .rightArrow:    return cursor("C")
-        case .leftArrow:     return cursor("D")
-        case .home:          return modified ? "\u{1b}[1;\(code)H" : "\u{1b}[H"
-        case .end:           return modified ? "\u{1b}[1;\(code)F" : "\u{1b}[F"
-        case .pageUp:        return "\u{1b}[5~"
-        case .pageDown:      return "\u{1b}[6~"
-        case .deleteForward: return "\u{1b}[3~"
-        // ⌥⌫ = delete the word before the cursor (ESC + DEL); plain ⌫ falls
-        // through to the character the event already carries.
-        case .delete, .backspace:
-            return modifiers.contains(.option) ? "\u{1b}\u{7f}" : nil
+        case .upArrow:       return .up
+        case .downArrow:     return .down
+        case .rightArrow:    return .right
+        case .leftArrow:     return .left
+        case .home:          return .home
+        case .end:           return .end
+        case .pageUp:        return .pageUp
+        case .pageDown:      return .pageDown
+        case .deleteForward: return .deleteForward
+        // AppKit calls the key above Return ".delete"; ".backspace" is the
+        // control character. Both are the same physical key here.
+        case .delete, .backspace: return .backspace
         default:             return nil
         }
+    }
+
+    private static func keyModifiers(for flags: NSEvent.ModifierFlags) -> KeyModifiers {
+        var modifiers: KeyModifiers = []
+        if flags.contains(.shift)   { modifiers.insert(.shift) }
+        if flags.contains(.option)  { modifiers.insert(.option) }
+        if flags.contains(.control) { modifiers.insert(.control) }
+        return modifiers
     }
 
     /// Cmd-V: send the clipboard's text to the shell.
@@ -148,8 +143,23 @@ final class TerminalView: NSView {
 
     // MARK: - Mouse selection
 
+    /// Hands the event to the running program when it tracks the mouse. Holding
+    /// Shift overrides that and selects text instead — the convention in every
+    /// terminal, and the only way to copy out of a mouse-tracking program.
+    private func reportMouse(_ kind: MouseEventKind, _ event: NSEvent,
+                             button: MouseButton = .left) -> Bool {
+        guard emulator.mouseTracking != .off,
+              !event.modifierFlags.contains(.shift) else { return false }
+        let position = gridPosition(at: convert(event.locationInWindow, from: nil))
+        emulator.sendMouse(kind, button: button,
+                           modifiers: TerminalView.keyModifiers(for: event.modifierFlags),
+                           column: position.column, row: position.row)
+        return true
+    }
+
     override func mouseDown(with event: NSEvent) {
         window?.makeFirstResponder(self)   // clicking a pane focuses it
+        if reportMouse(.press, event) { return }
         isSelecting = true
         let position = gridPosition(at: convert(event.locationInWindow, from: nil))
         switch event.clickCount {
@@ -169,11 +179,13 @@ final class TerminalView: NSView {
     }
 
     override func mouseDragged(with event: NSEvent) {
+        if reportMouse(.drag, event) { return }
         selectionEnd = absolute(gridPosition(at: convert(event.locationInWindow, from: nil)))
         needsDisplay = true
     }
 
     override func mouseUp(with event: NSEvent) {
+        if reportMouse(.release, event) { return }
         isSelecting = false
         // A plain single click (no drag, no double/triple) clears the selection.
         if event.clickCount <= 1, selectionStart == selectionEnd {
@@ -183,13 +195,53 @@ final class TerminalView: NSView {
         }
     }
 
-    /// Drops any active selection. Called when new output arrives: the selected
-    /// grid cells no longer hold the text the user picked (e.g. after a pager
-    /// like `git log` redraws or exits), so the highlight would be stale.
-    func clearSelectionForOutput() {
+    override func rightMouseDown(with event: NSEvent) {
+        if reportMouse(.press, event, button: .right) { return }
+        super.rightMouseDown(with: event)
+    }
+
+    override func rightMouseUp(with event: NSEvent) {
+        if reportMouse(.release, event, button: .right) { return }
+        super.rightMouseUp(with: event)
+    }
+
+    override func otherMouseDown(with event: NSEvent) {
+        if reportMouse(.press, event, button: .middle) { return }
+        super.otherMouseDown(with: event)
+    }
+
+    override func otherMouseUp(with event: NSEvent) {
+        if reportMouse(.release, event, button: .middle) { return }
+        super.otherMouseUp(with: event)
+    }
+
+    /// Drops any active selection. Called when the emulator says buffer-absolute
+    /// rows changed meaning (a pager opened or quit, the scrollback was dropped)
+    /// — the anchors would then highlight unrelated text. Plain output does *not*
+    /// come through here: a selection has to survive a running build, which is
+    /// exactly when you want to copy out of it.
+    func clearSelection() {
         guard selectionStart != nil || selectionEnd != nil else { return }
         selectionStart = nil
         selectionEnd = nil
+        needsDisplay = true
+    }
+
+    /// Repaints just what the last chunk of output changed. Redrawing the whole
+    /// grid for every chunk pushed every cell through CoreText and made a large
+    /// window sluggish under heavy output.
+    func markDirtyForOutput() {
+        let cursorRow = emulator.cursorPosition.row
+        let rows = GridGeometry.rowsToRepaint(dirty: emulator.takeDirtyRows(),
+                                              cursorRows: [lastCursorRow, cursorRow],
+                                              totalRows: emulator.rows)
+        lastCursorRow = cursorRow
+        guard let rows else { return }
+        let band = GridGeometry.band(forRows: rows,
+                                     cellHeight: Double(cellHeight),
+                                     padding: Double(padding))
+        setNeedsDisplay(NSRect(x: 0, y: CGFloat(band.minY),
+                               width: bounds.width, height: CGFloat(band.height)))
     }
 
     // MARK: - Scrolling
@@ -201,6 +253,20 @@ final class TerminalView: NSView {
             speed: AppSettings.store.scrollSpeed,
             cellHeight: Double(cellHeight))
         guard lines != 0 else { return }
+
+        // A program that tracks the mouse scrolls itself — that is what makes
+        // the wheel work properly in less, htop or a mouse-aware vim, instead
+        // of the arrow-key approximation below.
+        if emulator.mouseTracking != .off, !event.modifierFlags.contains(.shift) {
+            let position = gridPosition(at: convert(event.locationInWindow, from: nil))
+            let kind: MouseEventKind = lines > 0 ? .scrollUp : .scrollDown
+            let modifiers = TerminalView.keyModifiers(for: event.modifierFlags)
+            for _ in 0..<abs(lines) {
+                emulator.sendMouse(kind, button: .left, modifiers: modifiers,
+                                   column: position.column, row: position.row)
+            }
+            return
+        }
 
         // A full-screen program (less, man, vim, htop) owns the screen and has no
         // scrollback, so moving the viewport would do nothing at all. Send arrow
@@ -286,9 +352,18 @@ final class TerminalView: NSView {
 
     override func draw(_ dirtyRect: NSRect) {
         backgroundColor.setFill()
-        bounds.fill()
+        dirtyRect.fill()
 
-        for row in 0..<emulator.rows {
+        // Only the rows AppKit asked for. A chunk of output usually dirties a
+        // line or two; redrawing the whole grid pushed every cell through
+        // CoreText each time, which is what made a big window feel sluggish
+        // under heavy output.
+        let visibleRows = GridGeometry.rows(fromY: Double(dirtyRect.minY),
+                                            toY: Double(dirtyRect.maxY),
+                                            cellHeight: Double(cellHeight),
+                                            padding: Double(padding),
+                                            totalRows: emulator.rows)
+        for row in visibleRows {
             // Round cell edges to whole pixels so adjacent backgrounds tile
             // seamlessly — a fractional cellWidth/Height otherwise leaves thin
             // gridlines between cells (very visible on a full-screen background).
