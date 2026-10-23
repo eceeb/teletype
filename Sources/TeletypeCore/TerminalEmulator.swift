@@ -35,6 +35,9 @@ public final class TerminalEmulator {
 
     /// Feeds raw output bytes into the parser, updating the grid.
     public func feed(_ data: Data) {
+        let wasAlternate = terminal.isCurrentBufferAlternate
+        let previousBottom = liveBottom
+
         terminal.feed(byteArray: [UInt8](data))
         // Output returns to the live bottom: SwiftTerm pins yDisp to yBase on
         // output (it never sees a user scroll), so yDisp is now the true bottom.
@@ -43,6 +46,24 @@ public final class TerminalEmulator {
         // to the bottom".
         liveBottom = terminal.buffer.yDisp
         userScrolledBack = false
+
+        // Buffer-absolute row numbers only change meaning in two cases: the
+        // screen was swapped, or the bottom moved *backwards* because rows were
+        // dropped (ED 3). Growing output keeps every existing row where it was.
+        if wasAlternate != terminal.isCurrentBufferAlternate || liveBottom < previousBottom {
+            onBufferInvalidated?()
+        }
+    }
+
+    /// The rows that changed since this was last called, as a half-open range of
+    /// visible rows, or nil when nothing changed. Calling it clears the range,
+    /// so the renderer can repaint just that band instead of the whole grid.
+    public func takeDirtyRows() -> Range<Int>? {
+        guard let range = terminal.getUpdateRange() else { return nil }
+        terminal.clearUpdateRange()
+        let start = max(0, range.startY)
+        let end = min(rows, range.endY + 1)      // SwiftTerm's endY is inclusive
+        return start < end ? start..<end : nil
     }
 
     /// The visible text of a row (0 = top of the visible area), trailing
@@ -83,6 +104,10 @@ public final class TerminalEmulator {
     /// report, device attributes, …). The reply is written to the PTY as input —
     /// curses / full-screen apps rely on these answers to render correctly.
     public var onRespond: ((Data) -> Void)?
+    /// Called when buffer-absolute rows stop meaning what they did — the screen
+    /// was swapped (a pager opened or quit) or the scrollback was dropped.
+    /// Anything anchored to those rows, i.e. a selection, is stale afterwards.
+    public var onBufferInvalidated: (() -> Void)?
 
     /// Scrolls the viewport by `lines` (positive = toward older output).
     public func scroll(lines: Int) {
@@ -111,6 +136,30 @@ public final class TerminalEmulator {
     /// Whether a full-screen program (pager, editor, htop) owns the screen.
     /// There is no scrollback there, so the wheel must drive the program.
     public var isAlternateScreen: Bool { terminal.isCurrentBufferAlternate }
+
+    /// Which mouse events the running program asked to be told about. While
+    /// this is `.off` the mouse belongs to the terminal (text selection).
+    public var mouseTracking: MouseTracking {
+        switch terminal.mouseMode {
+        case .off:                 return .off
+        case .x10:                 return .pressOnly
+        case .vt200:               return .pressAndRelease
+        case .buttonEventTracking: return .withDrag
+        case .anyEvent:            return .anyMotion
+        @unknown default:          return .off
+        }
+    }
+
+    /// Reports a mouse event to the program, if it wants that kind. `column`
+    /// and `row` are 0-based visible-grid coordinates; SwiftTerm picks the wire
+    /// format the program negotiated (X10, SGR, urxvt, utf8).
+    public func sendMouse(_ kind: MouseEventKind, button: MouseButton,
+                          modifiers: KeyModifiers, column: Int, row: Int) {
+        guard MouseReport.shouldReport(kind, tracking: mouseTracking) else { return }
+        terminal.sendEvent(
+            buttonFlags: MouseReport.buttonFlags(kind, button: button, modifiers: modifiers),
+            x: column, y: row)
+    }
 
     /// Whether the program enabled bracketed paste (DECSET 2004). Pasted text
     /// then has to be wrapped so the shell takes it as one literal block
