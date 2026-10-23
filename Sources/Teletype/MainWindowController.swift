@@ -15,9 +15,9 @@ final class MainWindowController: NSWindowController, NSWindowDelegate {
     private var lastBarSignature = ""
     /// Flattened (tab, pane) list that the sidebar shows — one row per pane.
     private var paneRows: [(tab: TerminalTab, pane: TerminalPane)] = []
-    /// Panes in most-recently-focused order (front = current) so closing a pane
-    /// can return focus to the previously active one.
-    private var paneMRU: [TerminalPane] = []
+    /// Panes in most-recently-focused order, by identity, so closing a pane or
+    /// switching tabs can return focus where the user last was.
+    private var paneFocus = MRUOrder<ObjectIdentifier>()
 
     init() {
         let window = NSWindow(
@@ -54,15 +54,45 @@ final class MainWindowController: NSWindowController, NSWindowDelegate {
             }
         }
 
-        // Poll for working-directory changes so tab titles stay current.
-        titleTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
-            MainActor.assumeIsolated { self?.refreshTabBar() }
+        startTitlePolling()
+        // Each tick asks every pane's PTY for its cwd and foreground process.
+        // Off-screen that is pure waste, and it keeps the app awake, so follow
+        // the window: minimizing, hiding or covering it stops the polling.
+        for name: NSNotification.Name in [NSWindow.didChangeOcclusionStateNotification,
+                                          NSWindow.didMiniaturizeNotification,
+                                          NSWindow.didDeminiaturizeNotification] {
+            NotificationCenter.default.addObserver(forName: name, object: window, queue: .main) {
+                [weak self] _ in MainActor.assumeIsolated { self?.updateTitlePolling() }
+            }
         }
 
         restoreSession()
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
+
+    /// Starts (or restarts) the 1-second poll that keeps the sidebar current.
+    private func startTitlePolling() {
+        titleTimer?.invalidate()
+        titleTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated { self?.refreshTabBar() }
+        }
+    }
+
+    /// Polls only while the window is actually on screen.
+    private func updateTitlePolling() {
+        let visible = window?.isVisible == true
+            && window?.isMiniaturized == false
+            && window?.occlusionState.contains(.visible) == true
+        if visible {
+            guard titleTimer == nil else { return }
+            refreshTabBar()        // catch up on whatever changed while hidden
+            startTitlePolling()
+        } else {
+            titleTimer?.invalidate()
+            titleTimer = nil
+        }
+    }
 
     private var activeTab: TerminalTab? {
         tabs.indices.contains(activeIndex) ? tabs[activeIndex] : nil
@@ -120,8 +150,13 @@ final class MainWindowController: NSWindowController, NSWindowDelegate {
 
     /// Moves a pane to the front of the focus-MRU list.
     private func recordPaneFocus(_ pane: TerminalPane) {
-        paneMRU.removeAll { $0 === pane }
-        paneMRU.insert(pane, at: 0)
+        paneFocus.record(ObjectIdentifier(pane))
+    }
+
+    /// The pane of `tab` the user was in most recently (any of them if none was).
+    private func lastFocusedPane(of tab: TerminalTab) -> TerminalPane? {
+        guard let id = paneFocus.mostRecent(among: tab.panes.map(ObjectIdentifier.init)) else { return nil }
+        return tab.panes.first { ObjectIdentifier($0) == id }
     }
 
     /// A pane closed while its tab survived (⌘W, or a shell exiting on its own).
@@ -131,8 +166,7 @@ final class MainWindowController: NSWindowController, NSWindowDelegate {
     private func paneClosed(in tab: TerminalTab) {
         if tab === activeTab {
             showActiveTab()
-            let next = paneMRU.first { p in tab.panes.contains { $0 === p } } ?? tab.panes.first
-            if let next { window?.makeFirstResponder(next.view) }
+            if let next = lastFocusedPane(of: tab) { window?.makeFirstResponder(next.view) }
         }
         refreshTabBar()
         saveSession()
@@ -182,9 +216,8 @@ final class MainWindowController: NSWindowController, NSWindowDelegate {
 
     /// Puts focus on the most-recently-used pane of the active tab.
     private func focusActivePane() {
-        guard let tab = activeTab else { return }
-        let pane = paneMRU.first { p in tab.panes.contains { $0 === p } } ?? tab.panes.first
-        if let pane { window?.makeFirstResponder(pane.view) }
+        guard let tab = activeTab, let pane = lastFocusedPane(of: tab) else { return }
+        window?.makeFirstResponder(pane.view)
     }
 
     func selectTab(at index: Int) {
@@ -192,8 +225,11 @@ final class MainWindowController: NSWindowController, NSWindowDelegate {
         activeIndex = index
         markUsed(tabs[index])
         showActiveTab()
+        // Back to the pane the user last worked in — not always the first one.
+        // Before refreshTabBar(), which reads the first responder to decide
+        // which sidebar row to highlight.
+        focusActivePane()
         refreshTabBar()
-        if let view = tabs[index].firstPaneView() { window?.makeFirstResponder(view) }
     }
 
     /// Makes the content area show the active tab's container, correctly sized.
@@ -241,7 +277,7 @@ final class MainWindowController: NSWindowController, NSWindowDelegate {
                                      groupLabel: tab.customName ?? summary.header))
             }
         }
-        paneMRU.removeAll { p in !paneRows.contains { $0.pane === p } }   // drop closed panes
+        paneFocus.prune(keeping: paneRows.map { ObjectIdentifier($0.pane) })   // drop closed panes
         let activeRow = activePaneRowIndex()
         let signature = "\(activeRow)#" + items.map { "\($0.groupIndex):\($0.groupLabel ?? "")>\($0.title)~\($0.subtitle ?? "")" }.joined(separator: "|")
         guard signature != lastBarSignature else { return }
