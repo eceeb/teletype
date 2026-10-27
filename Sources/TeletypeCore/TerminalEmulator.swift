@@ -1,6 +1,22 @@
 import Foundation
 import SwiftTerm
 
+/// How the cursor is drawn. Programs set this with DECSCUSR — vim switches to
+/// a bar in insert mode and back to a block in normal mode.
+public enum CursorShape: Sendable {
+    case block, underline, bar
+}
+
+public struct TerminalCursorStyle: Equatable, Sendable {
+    public let shape: CursorShape
+    public let blinks: Bool
+
+    public init(shape: CursorShape, blinks: Bool) {
+        self.shape = shape
+        self.blinks = blinks
+    }
+}
+
 /// Turns a raw byte stream (e.g. PTY output) into a character grid by driving
 /// SwiftTerm's escape-sequence parser.
 ///
@@ -22,7 +38,13 @@ public final class TerminalEmulator {
 
     public init(columns: Int = 80, rows: Int = 24, scrollback: Int = 10_000) {
         delegate = NoopDelegate()
-        terminal = Terminal(delegate: delegate, options: TerminalOptions(scrollback: max(0, scrollback)))
+        // Start both sides on the same style. SwiftTerm defaults to a blinking
+        // block and only reports *changes*, so without this a program asking for
+        // "blinking block" (DECSCUSR 1) would be silently dropped while we drew
+        // a steady one.
+        terminal = Terminal(delegate: delegate,
+                            options: TerminalOptions(cursorStyle: .steadyBlock,
+                                                     scrollback: max(0, scrollback)))
         terminal.resize(cols: columns, rows: rows)
         // Forward terminal→program replies to the PTY.
         delegate.onSend = { [weak self] data in self?.onRespond?(Data(data)) }
@@ -64,6 +86,60 @@ public final class TerminalEmulator {
         let start = max(0, range.startY)
         let end = min(rows, range.endY + 1)      // SwiftTerm's endY is inclusive
         return start < end ? start..<end : nil
+    }
+
+    /// How the running program wants the cursor drawn (DECSCUSR).
+    public var cursorStyle: TerminalCursorStyle { delegate.cursorStyle }
+
+    /// Called when a program rings the bell (BEL).
+    public var onBell: (() -> Void)? {
+        get { delegate.onBell }
+        set { delegate.onBell = newValue }
+    }
+
+    /// Called when the program changes the cursor style.
+    public var onCursorStyleChange: (() -> Void)? {
+        get { delegate.onCursorStyleChange }
+        set { delegate.onCursorStyleChange = newValue }
+    }
+
+    /// The whole of what has been written, for Select All: from the first row to
+    /// the end of the last non-empty one. Nil when the terminal is still blank.
+    public func contentRange() -> (start: GridPosition, end: GridPosition)? {
+        let lines = bufferLines()
+        guard let lastUsed = lines.lastIndex(where: { !$0.isEmpty }) else { return nil }
+        return (GridPosition(row: 0, column: 0),
+                GridPosition(row: lastUsed, column: max(0, lines[lastUsed].count - 1)))
+    }
+
+    /// Every line in the buffer — scrollback first, then the visible screen —
+    /// indexed by buffer-absolute row. This is what search runs over.
+    ///
+    /// SwiftTerm only exposes cells through the viewport, so the rows are read
+    /// by parking it; the viewport is put back before returning.
+    public func bufferLines() -> [String] {
+        let savedOffset = terminal.buffer.yDisp
+        defer { terminal.buffer.yDisp = savedOffset }
+
+        var lines: [String] = []
+        lines.reserveCapacity(liveBottom + rows)
+        for absoluteRow in 0..<(liveBottom + rows) {
+            // getLine(row:) reads lines[row + yDisp], so park the viewport at or
+            // before the wanted row and index the rest from there.
+            let offset = min(absoluteRow, liveBottom)
+            terminal.buffer.yDisp = offset
+            lines.append(terminal.getLine(row: absoluteRow - offset)?
+                .translateToString(trimRight: true) ?? "")
+        }
+        return lines
+    }
+
+    /// Scrolls so that `absoluteRow` is visible, centering it when there is room.
+    public func scrollToReveal(absoluteRow: Int) {
+        let centered = absoluteRow - rows / 2
+        let target = max(0, min(liveBottom, centered))
+        terminal.buffer.yDisp = target
+        userScrolledBack = target < liveBottom
     }
 
     /// The visible text of a row (0 = top of the visible area), trailing
@@ -309,6 +385,9 @@ public final class TerminalEmulator {
     private final class NoopDelegate: TerminalDelegate {
         var cursorVisible = true
         var title = ""
+        var cursorStyle = TerminalCursorStyle(shape: .block, blinks: false)
+        var onCursorStyleChange: (() -> Void)?
+        var onBell: (() -> Void)?
         var onChange: (() -> Void)?
         var onSend: ((ArraySlice<UInt8>) -> Void)?
         func send(source: Terminal, data: ArraySlice<UInt8>) { onSend?(data) }
@@ -319,5 +398,17 @@ public final class TerminalEmulator {
             onChange?()
         }
         func hostCurrentDirectoryUpdated(source: Terminal) { onChange?() }
+        func bell(source: Terminal) { onBell?() }
+        func cursorStyleChanged(source: Terminal, newStyle: CursorStyle) {
+            switch newStyle {
+            case .blinkBlock:      cursorStyle = .init(shape: .block, blinks: true)
+            case .steadyBlock:     cursorStyle = .init(shape: .block, blinks: false)
+            case .blinkUnderline:  cursorStyle = .init(shape: .underline, blinks: true)
+            case .steadyUnderline: cursorStyle = .init(shape: .underline, blinks: false)
+            case .blinkBar:        cursorStyle = .init(shape: .bar, blinks: true)
+            case .steadyBar:       cursorStyle = .init(shape: .bar, blinks: false)
+            }
+            onCursorStyleChange?()
+        }
     }
 }

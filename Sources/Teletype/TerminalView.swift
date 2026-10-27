@@ -33,6 +33,12 @@ final class TerminalView: NSView {
     private var scrollAccumulator = ScrollAccumulator()
     /// Where the cursor was at the last repaint, so the cell it left is cleared.
     private var lastCursorRow = 0
+    /// ⌘F state: the bar, the hits (buffer-absolute) and which one is current.
+    private var findBar: FindBarView?
+    private var searchHits: [SearchMatch] = []
+    private var currentHit: SearchMatch?
+    /// The fading overlay of a visual bell, while one is running.
+    private var bellFlash: NSView?
 
     init(emulator: TerminalEmulator, fontSize: CGFloat = 13, background: NSColor = .black, foreground: NSColor = .white) {
         self.emulator = emulator
@@ -159,6 +165,7 @@ final class TerminalView: NSView {
 
     override func mouseDown(with event: NSEvent) {
         window?.makeFirstResponder(self)   // clicking a pane focuses it
+        if event.modifierFlags.contains(.command), openLink(at: event) { return }
         if reportMouse(.press, event) { return }
         isSelecting = true
         let position = gridPosition(at: convert(event.locationInWindow, from: nil))
@@ -244,6 +251,124 @@ final class TerminalView: NSView {
                                width: bounds.width, height: CGFloat(band.height)))
     }
 
+    /// ⌘-click on a URL opens it in the default browser.
+    private func openLink(at event: NSEvent) -> Bool {
+        let position = gridPosition(at: convert(event.locationInWindow, from: nil))
+        let line = emulator.line(position.row)
+        guard let hit = LinkDetection.url(in: line, atColumn: position.column),
+              let url = URL(string: hit.text) else { return false }
+        NSWorkspace.shared.open(url)
+        return true
+    }
+
+    /// A program rang the bell. Silent unless the user turned it on in Settings.
+    func ringBell() {
+        switch AppSettings.store.bellStyle {
+        case .none:
+            break
+        case .sound:
+            NSSound.beep()
+        case .visual:
+            flashBell()
+        }
+    }
+
+    /// A short, soft flash over the pane — visible without being a strobe.
+    private func flashBell() {
+        guard bellFlash == nil else { return }       // don't stack flashes
+        let flash = NSView(frame: bounds)
+        flash.autoresizingMask = [.width, .height]
+        flash.wantsLayer = true
+        flash.layer?.backgroundColor = foregroundColor.withAlphaComponent(0.18).cgColor
+        addSubview(flash)
+        bellFlash = flash
+        NSAnimationContext.runAnimationGroup { context in
+            context.duration = 0.18
+            flash.animator().alphaValue = 0
+        } completionHandler: { [weak self] in
+            self?.bellFlash?.removeFromSuperview()
+            self?.bellFlash = nil
+        }
+    }
+
+    // MARK: - Find
+
+    /// ⌘F: opens the bar (or refocuses it if already open).
+    @objc func openFind(_ sender: Any?) {
+        if let bar = findBar {
+            bar.focusField()
+            return
+        }
+        let bar = FindBarView()
+        bar.onQueryChanged = { [weak self] query in self?.runSearch(query) }
+        bar.onNext = { [weak self] in self?.step(forward: true) }
+        bar.onPrevious = { [weak self] in self?.step(forward: false) }
+        bar.onClose = { [weak self] in self?.closeFind() }
+        addSubview(bar)
+        findBar = bar
+        layoutFindBar()
+        bar.focusField()
+    }
+
+    @objc func findNext(_ sender: Any?) { step(forward: true) }
+    @objc func findPrevious(_ sender: Any?) { step(forward: false) }
+
+    private func closeFind() {
+        findBar?.removeFromSuperview()
+        findBar = nil
+        searchHits = []
+        currentHit = nil
+        window?.makeFirstResponder(self)
+        needsDisplay = true
+    }
+
+    private func runSearch(_ query: String) {
+        searchHits = TextSearch.matches(of: query, in: emulator.bufferLines(),
+                                        caseSensitive: false)
+        // Start at the hit nearest the bottom — the newest output is what you
+        // are usually looking for.
+        currentHit = searchHits.last
+        reveal(currentHit)
+        updateFindCount()
+        needsDisplay = true
+    }
+
+    private func step(forward: Bool) {
+        guard !searchHits.isEmpty else { return }
+        currentHit = forward ? TextSearch.next(after: currentHit, in: searchHits)
+                             : TextSearch.previous(before: currentHit, in: searchHits)
+        reveal(currentHit)
+        updateFindCount()
+        needsDisplay = true
+    }
+
+    private func reveal(_ hit: SearchMatch?) {
+        guard let hit else { return }
+        emulator.scrollToReveal(absoluteRow: hit.row)
+    }
+
+    private func updateFindCount() {
+        let index = currentHit.flatMap { hit in searchHits.firstIndex(of: hit) }
+        findBar?.showCount(current: index, total: searchHits.count)
+    }
+
+    private func layoutFindBar() {
+        guard let bar = findBar else { return }
+        let size = bar.intrinsicContentSize
+        bar.frame = NSRect(x: max(0, bounds.width - size.width - 12), y: 10,
+                           width: size.width, height: size.height)
+    }
+
+    // MARK: - Select All
+
+    /// ⌘A: selects everything written, scrollback included.
+    @objc override func selectAll(_ sender: Any?) {
+        guard let range = emulator.contentRange() else { return }
+        selectionStart = range.start
+        selectionEnd = range.end
+        needsDisplay = true
+    }
+
     // MARK: - Scrolling
 
     override func scrollWheel(with event: NSEvent) {
@@ -310,6 +435,19 @@ final class TerminalView: NSView {
         GridPosition(row: position.row + emulator.scrollOffset, column: position.column)
     }
 
+    /// Amber for every hit, orange for the one you are on — nil when the cell
+    /// isn't part of a match.
+    private func searchHighlight(row: Int, column: Int) -> NSColor? {
+        guard !searchHits.isEmpty else { return nil }
+        let absoluteRow = row + emulator.scrollOffset
+        guard let hit = searchHits.first(where: {
+            $0.row == absoluteRow && column >= $0.column && column < $0.column + $0.length
+        }) else { return nil }
+        return hit == currentHit
+            ? NSColor(srgbRed: 1.0, green: 0.55, blue: 0.10, alpha: 0.55)
+            : NSColor(srgbRed: 1.0, green: 0.85, blue: 0.25, alpha: 0.32)
+    }
+
     private func isSelected(row: Int, column: Int) -> Bool {
         guard let s = selectionStart, let e = selectionEnd, s != e else { return false }
         let (start, end) = s <= e ? (s, e) : (e, s)
@@ -322,6 +460,7 @@ final class TerminalView: NSView {
     override func setFrameSize(_ newSize: NSSize) {
         super.setFrameSize(newSize)
         reportGridSizeIfChanged()
+        layoutFindBar()
     }
 
     // The pane is often sized before it's inserted into the window (session
@@ -387,6 +526,10 @@ final class TerminalView: NSView {
                     NSColor(srgbRed: 1.0, green: 0.35, blue: 0.65, alpha: 0.45).setFill()
                     rect.fill()
                 }
+                if let highlight = searchHighlight(row: row, column: col) {
+                    highlight.setFill()
+                    rect.fill()
+                }
 
                 // Skip blanks and the trailing half of a wide glyph (width 0).
                 if cell.width > 0, cell.character != " " {
@@ -409,21 +552,37 @@ final class TerminalView: NSView {
         let cursor = emulator.cursorPosition
         guard cursor.row >= 0, cursor.row < emulator.rows,
               cursor.column >= 0, cursor.column < emulator.columns else { return }
-        let rect = CGRect(
+        let cell = CGRect(
             x: padding + CGFloat(cursor.column) * cellWidth,
             y: padding + CGFloat(cursor.row) * cellHeight,
             width: cellWidth,
             height: cellHeight
         )
-        if window?.firstResponder === self {
-            foregroundColor.withAlphaComponent(0.6).setFill()
-            rect.fill()
-        } else {
+        // An unfocused pane always shows the hollow block, so you can see at a
+        // glance which pane takes your keystrokes.
+        guard window?.firstResponder === self else {
             foregroundColor.withAlphaComponent(0.6).setStroke()
-            let path = NSBezierPath(rect: rect.insetBy(dx: 0.5, dy: 0.5))
+            let path = NSBezierPath(rect: cell.insetBy(dx: 0.5, dy: 0.5))
             path.lineWidth = 1
             path.stroke()
+            return
         }
+        // The shape the program asked for (DECSCUSR): vim uses a bar in insert
+        // mode. We honor the shape but not the blink — a steady cursor is
+        // calmer, and blinking would need a timer per pane.
+        let thickness: CGFloat = 2
+        let rect: CGRect
+        switch emulator.cursorStyle.shape {
+        case .block:
+            rect = cell
+        case .underline:
+            rect = CGRect(x: cell.minX, y: cell.maxY - thickness,
+                          width: cell.width, height: thickness)
+        case .bar:
+            rect = CGRect(x: cell.minX, y: cell.minY, width: thickness, height: cell.height)
+        }
+        foregroundColor.withAlphaComponent(0.6).setFill()
+        rect.fill()
     }
 
     /// One monospace cell's advance, in whole pixels. Measured from a real glyph
