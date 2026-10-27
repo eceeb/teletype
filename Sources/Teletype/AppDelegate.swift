@@ -86,7 +86,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             window.title = "Settings"
             window.styleMask = [.titled, .closable]
             window.isReleasedWhenClosed = false
-            window.setContentSize(NSSize(width: 380, height: 420))
+            window.setContentSize(NSSize(width: 380, height: 470))   // grew with the Bell row
             settingsWindow = window
         }
         settingsWindow?.center()
@@ -118,11 +118,29 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         mainMenu.addItem(appItem)
         let appMenu = NSMenu()
         appItem.submenu = appMenu
+        appMenu.addItem(withTitle: "About Teletype",
+                        action: #selector(NSApplication.orderFrontStandardAboutPanel(_:)),
+                        keyEquivalent: "")
+        appMenu.addItem(.separator())
         let settingsItem = NSMenuItem(title: "Settings…",
                                       action: #selector(openSettings(_:)),
                                       keyEquivalent: ",")
         settingsItem.target = self
         appMenu.addItem(settingsItem)
+        appMenu.addItem(.separator())
+        // Without these the standard ⌘H / ⌥⌘H do nothing at all: a key
+        // equivalent only exists if some menu item carries it.
+        appMenu.addItem(withTitle: "Hide Teletype",
+                        action: #selector(NSApplication.hide(_:)),
+                        keyEquivalent: "h")
+        let hideOthers = NSMenuItem(title: "Hide Others",
+                                    action: #selector(NSApplication.hideOtherApplications(_:)),
+                                    keyEquivalent: "h")
+        hideOthers.keyEquivalentModifierMask = [.command, .option]
+        appMenu.addItem(hideOthers)
+        appMenu.addItem(withTitle: "Show All",
+                        action: #selector(NSApplication.unhideAllApplications(_:)),
+                        keyEquivalent: "")
         appMenu.addItem(.separator())
         appMenu.addItem(withTitle: "Quit Teletype",
                         action: #selector(NSApplication.terminate(_:)),
@@ -145,6 +163,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         shellMenu.addItem(withTitle: "Close Pane",
                           action: #selector(MainWindowController.closeActivePane(_:)),
                           keyEquivalent: "w")
+        let closeTab = NSMenuItem(title: "Close Tab",
+                                  action: #selector(MainWindowController.closeActiveTab(_:)),
+                                  keyEquivalent: "w")
+        closeTab.keyEquivalentModifierMask = [NSEvent.ModifierFlags.command, .shift]
+        shellMenu.addItem(closeTab)
 
         shellMenu.addItem(.separator())
 
@@ -215,15 +238,62 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         editMenu.addItem(withTitle: "Paste",
                          action: #selector(NSText.paste(_:)),
                          keyEquivalent: "v")
+        editMenu.addItem(withTitle: "Select All",
+                         action: #selector(NSText.selectAll(_:)),
+                         keyEquivalent: "a")
+        editMenu.addItem(.separator())
+        editMenu.addItem(withTitle: "Find…",
+                         action: #selector(TerminalView.openFind(_:)),
+                         keyEquivalent: "f")
+        editMenu.addItem(withTitle: "Find Next",
+                         action: #selector(TerminalView.findNext(_:)),
+                         keyEquivalent: "g")
+        let findPrevious = NSMenuItem(title: "Find Previous",
+                                      action: #selector(TerminalView.findPrevious(_:)),
+                                      keyEquivalent: "g")
+        findPrevious.keyEquivalentModifierMask = [NSEvent.ModifierFlags.command, .shift]
+        editMenu.addItem(findPrevious)
+        // Everything we added here is ours; menuNeedsUpdate drops the rest.
+        editMenu.items.forEach { $0.tag = Self.ownMenuItemTag }
+
+        // View menu: font size.
+        let viewItem = NSMenuItem()
+        mainMenu.addItem(viewItem)
+        let viewMenu = NSMenu(title: "View")
+        viewItem.submenu = viewMenu
+        viewMenu.addItem(withTitle: "Zoom In",
+                         action: #selector(MainWindowController.increaseFontSize(_:)),
+                         keyEquivalent: "+")
+        viewMenu.addItem(withTitle: "Zoom Out",
+                         action: #selector(MainWindowController.decreaseFontSize(_:)),
+                         keyEquivalent: "-")
+        viewMenu.addItem(withTitle: "Actual Size",
+                         action: #selector(MainWindowController.resetFontSize(_:)),
+                         keyEquivalent: "0")
+
+        // Window menu: ⌘M has no effect unless an item carries it.
+        let windowItem = NSMenuItem()
+        mainMenu.addItem(windowItem)
+        let windowMenu = NSMenu(title: "Window")
+        windowItem.submenu = windowMenu
+        windowMenu.addItem(withTitle: "Minimize",
+                           action: #selector(NSWindow.performMiniaturize(_:)),
+                           keyEquivalent: "m")
+        windowMenu.addItem(withTitle: "Zoom",
+                           action: #selector(NSWindow.performZoom(_:)),
+                           keyEquivalent: "")
+        NSApp.windowsMenu = windowMenu
 
         NSApp.mainMenu = mainMenu
     }
 
+    /// Marks the Edit-menu items we built ourselves.
+    private static let ownMenuItemTag = 0x7e1e
+
     /// macOS appends AutoFill / Writing Tools / Dictation / Emoji to any "Edit"
-    /// menu; keep only the items we defined (Copy, Paste).
+    /// menu; keep only the items we defined.
     func menuNeedsUpdate(_ menu: NSMenu) {
-        let ours: Set<Selector> = [#selector(NSText.copy(_:)), #selector(NSText.paste(_:))]
-        for item in menu.items where !(item.action.map(ours.contains) ?? false) {
+        for item in menu.items where item.tag != Self.ownMenuItemTag {
             menu.removeItem(item)
         }
     }
