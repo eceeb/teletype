@@ -82,6 +82,8 @@ final class TerminalPane {
 
         session.onUpdate = { [weak view] in view?.markDirtyForOutput() }
         session.emulator.onBufferInvalidated = { [weak view] in view?.clearSelection() }
+        session.emulator.onCursorStyleChange = { [weak view] in view?.needsDisplay = true }
+        session.emulator.onBell = { [weak view] in view?.ringBell() }
         session.onExit = { [weak self] in self?.onExit?() }
         view.onInput = { [weak session] data in session?.write(data) }
         view.onResize = { [weak session] cols, rows in session?.resize(columns: cols, rows: rows) }
