@@ -30,6 +30,10 @@ final class MainWindowController: NSWindowController, NSWindowDelegate {
         window.titleVisibility = .hidden   // most apps don't show their name in the title bar
         super.init(window: window)
         window.delegate = self
+        // We run our own tab system, so keep macOS's native window tabbing out
+        // of the View and Window menus — "Show Tab Bar" and "Merge All Windows"
+        // would do nothing here but confuse.
+        window.tabbingMode = .disallowed
 
         rootView = MainContentView(tabBar: tabBar)
         rootView.placement = placementFromSettings()
@@ -309,6 +313,29 @@ final class MainWindowController: NSWindowController, NSWindowDelegate {
         // Routes through the same callbacks as a shell exiting: a surviving tab
         // fires onPaneClosed (refocus + refresh), the last pane fires onEmpty (drop).
         tab.close(pane: active)
+    }
+
+    /// Closes the active tab with all of its panes at once.
+    @objc func closeActiveTab(_ sender: Any?) {
+        guard let tab = activeTab else { return }
+        removeTab(tab)        // terminates every pane and drops the tab
+        saveSession()
+    }
+
+    // MARK: - Font size
+
+    @objc func increaseFontSize(_ sender: Any?) { stepFontSize(by: 1) }
+    @objc func decreaseFontSize(_ sender: Any?) { stepFontSize(by: -1) }
+    @objc func resetFontSize(_ sender: Any?) { applyFontSize(FontScaling.defaultSize) }
+
+    private func stepFontSize(by delta: Double) {
+        applyFontSize(FontScaling.stepped(AppSettings.store.fontSize, by: delta))
+    }
+
+    private func applyFontSize(_ size: Double) {
+        guard size != AppSettings.store.fontSize else { return }
+        AppSettings.store.fontSize = size
+        AppSettings.notifyChanged()   // panes re-measure and reflow their PTY
     }
 
     @objc func splitRight(_ sender: Any?) { splitActivePane(vertical: true) }

@@ -25,15 +25,29 @@ struct ShortcutsView: View {
             Item(action: "Split Down", keys: "⇧⌘D"),
             Item(action: "New Claude Pane", keys: "⇧⌘E"),
             Item(action: "Close Pane", keys: "⌘W"),
+            Item(action: "Close Tab", keys: "⇧⌘W"),
             Item(action: "Previous / Next Pane", keys: "⌘[   ⌘]"),
             Item(action: "Focus Pane", keys: "⌥⌘ ← ↑ ↓ →")
         ]),
         Group(title: "Edit", items: [
             Item(action: "Copy", keys: "⌘C"),
-            Item(action: "Paste", keys: "⌘V")
+            Item(action: "Paste", keys: "⌘V"),
+            Item(action: "Select All", keys: "⌘A"),
+            Item(action: "Find", keys: "⌘F"),
+            Item(action: "Find Next / Previous", keys: "⌘G   ⇧⌘G")
+        ]),
+        Group(title: "View", items: [
+            Item(action: "Zoom In / Out", keys: "⌘+   ⌘−"),
+            Item(action: "Actual Size", keys: "⌘0")
+        ]),
+        Group(title: "Mouse", items: [
+            Item(action: "Open Link", keys: "⌘-click"),
+            Item(action: "Select in a mouse-aware app", keys: "⇧-drag")
         ]),
         Group(title: "App", items: [
             Item(action: "Settings", keys: "⌘,"),
+            Item(action: "Hide", keys: "⌘H"),
+            Item(action: "Minimize", keys: "⌘M"),
             Item(action: "Quit", keys: "⌘Q")
         ])
     ]
