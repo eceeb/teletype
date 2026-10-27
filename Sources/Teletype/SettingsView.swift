@@ -17,6 +17,7 @@ struct SettingsView: View {
     @State private var claudeCmd = AppSettings.store.claudeCommand ?? ""
     @State private var tabsOnLeft = (AppSettings.store.tabPlacement == "left")
     @State private var appIcon = AppSettings.store.appIconName ?? AppIconCatalog.defaultID
+    @State private var bellStyle = AppSettings.store.bellStyle
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -43,6 +44,16 @@ struct SettingsView: View {
                     Text("100,000 lines").tag(100_000)
                     Text("200,000 lines").tag(200_000)
                 }
+                .labelsHidden()
+            }
+            HStack {
+                Text("Bell")
+                Picker("", selection: $bellStyle) {
+                    Text("Silent").tag(BellStyle.none)
+                    Text("Sound").tag(BellStyle.sound)
+                    Text("Flash").tag(BellStyle.visual)
+                }
+                .pickerStyle(.segmented)
                 .labelsHidden()
             }
             HStack {
@@ -142,6 +153,9 @@ struct SettingsView: View {
         .onChange(of: sidebarColor) { _, value in
             AppSettings.store.sidebarColor = TermColor(NSColor(value))
             AppSettings.notifyChanged()             // sidebar recolors live
+        }
+        .onChange(of: bellStyle) { _, value in
+            AppSettings.store.bellStyle = value     // read live by ringBell()
         }
         .onChange(of: claudeCmd) { _, value in
             AppSettings.store.claudeCommand = value.isEmpty ? nil : value

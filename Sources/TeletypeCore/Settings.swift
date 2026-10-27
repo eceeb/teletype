@@ -1,5 +1,10 @@
 import Foundation
 
+/// What happens when a program rings the terminal bell (BEL, \a).
+public enum BellStyle: String, Sendable, CaseIterable {
+    case none, sound, visual
+}
+
 /// User-configurable terminal settings, persisted in `UserDefaults`
 /// (which is itself thread-safe, hence `@unchecked Sendable`).
 public final class TerminalSettings: @unchecked Sendable {
@@ -78,6 +83,12 @@ public final class TerminalSettings: @unchecked Sendable {
         set { defaults.set(newValue, forKey: Key.appIconName) }
     }
 
+    /// What a BEL does. Defaults to silence, which is what Teletype always did.
+    public var bellStyle: BellStyle {
+        get { BellStyle(rawValue: defaults.string(forKey: Key.bellStyle) ?? "") ?? .none }
+        set { defaults.set(newValue.rawValue, forKey: Key.bellStyle) }
+    }
+
     /// Sidebar background color; nil → the system window background (default).
     public var sidebarColor: TermColor? {
         get { color(forKey: Key.sidebarColor) }
@@ -111,5 +122,6 @@ public final class TerminalSettings: @unchecked Sendable {
         static let claudeCommand = "claudeCommand"
         static let appIconName = "appIconName"
         static let sidebarColor = "sidebarColor"
+        static let bellStyle = "bellStyle"
     }
 }
