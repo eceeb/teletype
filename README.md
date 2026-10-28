@@ -7,18 +7,31 @@ A fast, native macOS terminal emulator, built in Swift + AppKit with
 
 - **Tabs** (top bar or left sidebar) and **split panes** (nested, resizable)
 - The sidebar lists every pane; panes of a tab are grouped and labelled by their
-  shared folder (e.g. root `e`, rows `teletype` / `teletype/Tests`)
+  shared folder, and a group header can be renamed by double-clicking it
 - **Session restore** — reopens your tabs, splits, and each shell's working
   directory on launch (layout only, no scrollback)
-- True-color rendering, bold / italic / underline, wide glyphs, Nerd-Font icons
-  (bundled JetBrainsMono)
+- **Search the scrollback** with ⌘F: every hit is highlighted, ⌘G / ⇧⌘G walk
+  them, and jumping to one scrolls it into view
+- **⌘-click opens a link** in your browser
+- **Mouse support in full-screen programs** — vim, htop and less get real
+  mouse events (click, drag, wheel); hold Shift to select text instead
+- True-color rendering, bold / italic / underline, wide glyphs and emoji,
+  Nerd-Font icons (bundled JetBrainsMono)
 - Mouse selection + copy (drag / double-click word / triple-click line), paste
-- Scrollback, visible cursor, live resize, window position persistence
+  (bracketed where the program asks for it), ⌘A selects the whole buffer
+- Scrollback (configurable size), live resize, window position persistence
+- The cursor takes the shape a program asks for — vim's bar in insert mode —
+  and blinks if it says so
 - **Color themes** — 13 built-in profiles (Dracula, Nord, Gruvbox, Solarized
   Dark/Light, Tokyo Night, Catppuccin, Monokai, …) that recolor the
-  background, text and all 16 ANSI colors
-- Live **settings**: font size, color theme, background & text color, scroll
-  speed, shell, new-tab folder, tab placement, and the `claude` command
+  background, text and all 16 ANSI colors. A program can override them for
+  itself with OSC 10/11/12
+- A program can also copy to the clipboard (OSC 52, how tmux and vim do it over
+  SSH) and raise a notification (OSC 777). Reading the clipboard is refused
+- **Bell**: silent (the default), a sound, or a short flash
+- Live **settings**: font size, color theme, background & text color, sidebar
+  color, scroll speed, scrollback size, bell, app icon, shell, new-tab folder,
+  tab placement, and the `claude` command
 - A **Claude** tab/pane that runs the `claude` CLI
 - Configurable shell (defaults to `$SHELL`); a new split inherits the active
   pane's directory, new tabs open in a configurable folder
@@ -31,11 +44,15 @@ A fast, native macOS terminal emulator, built in Swift + AppKit with
 | Go to Tab 1–9 / Last Used | ⌘1…9 / ⌃⇥ |
 | Split Right / Split Down | ⌘D / ⇧⌘D |
 | New Claude Pane | ⇧⌘E |
-| Close Pane | ⌘W |
+| Close Pane / Close Tab | ⌘W / ⇧⌘W |
 | Previous / Next Pane | ⌘[ / ⌘] |
 | Focus Pane | ⌥⌘ ← ↑ ↓ → |
-| Copy / Paste | ⌘C / ⌘V |
-| Settings | ⌘, |
+| Copy / Paste / Select All | ⌘C / ⌘V / ⌘A |
+| Find / Next / Previous | ⌘F / ⌘G / ⇧⌘G |
+| Zoom In / Out / Actual Size | ⌘+ / ⌘− / ⌘0 |
+| Open link under pointer | ⌘-click |
+| Select text in a mouse-aware program | ⇧-drag |
+| Settings / Hide / Minimize | ⌘, / ⌘H / ⌘M |
 
 (Also available in-app under Settings → Keyboard Shortcuts.)
 
