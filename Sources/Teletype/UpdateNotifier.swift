@@ -18,6 +18,17 @@ enum UpdateNotifier {
     /// Called at launch. Does nothing if the user switched the check off, or if
     /// it already ran today. Never interrupts — the result lands in the menu.
     static func checkInBackground() {
+        if ProcessInfo.processInfo.arguments.contains("-probeUpdateNotice") {
+            // For checking how the notice looks in a dev build, which has no
+            // Info.plist and therefore no recorded versions to compare.
+            pendingUpdates = [DependencyUpdate(
+                dependency: Dependency(name: "SwiftTerm", repository: "migueldeicaza/SwiftTerm",
+                                       current: Version("1.20.0")!),
+                status: UpdateStatus(current: Version("1.20.0")!, latest: Version("1.99.1")!),
+                failed: false)]
+            onResult?()
+            return
+        }
         guard AppSettings.store.checksForUpdates else { return }
         guard UpdateChecker.shouldCheck(lastCheck: AppSettings.store.lastUpdateCheck,
                                         now: Date(), interval: checkInterval) else { return }
@@ -81,13 +92,6 @@ enum UpdateNotifier {
         report(title: updates.count == 1 ? "An update is available" : "Updates are available",
                body: lines.joined(separator: "\n")
                    + "\n\nTo pull them in:\n  swift package update\n  swift test\n  bash packaging/install.sh")
-    }
-
-    /// What the "Check for Updates…" menu item should read.
-    static var menuTitle: String {
-        guard let first = pendingUpdates.first else { return "Check for Updates…" }
-        if pendingUpdates.count > 1 { return "\(pendingUpdates.count) Library Updates…" }
-        return "Update: \(first.dependency.name) \(first.status?.latest.description ?? "")…"
     }
 
     private static func report(title: String, body: String) {

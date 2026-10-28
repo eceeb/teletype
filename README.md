@@ -71,9 +71,9 @@ Contributing? See [CLAUDE.md](CLAUDE.md) for the project layout, data flow, and 
 ## Updating dependencies
 
 The app checks once a day whether the libraries it was built against have newer
-releases, and says so in the Teletype menu ("Update: SwiftTerm 1.99.1…"). It
-never interrupts; ask it directly with **Teletype → Check for Updates…**, and
-turn the daily check off in Settings. Nothing is sent but the request to
+releases, and says so at the bottom of the sidebar. It never interrupts; click
+the notice or use **Teletype → Check for Updates…** for the details, and turn
+the daily check off in Settings. Nothing is sent but the request to
 GitHub's releases API.
 
 The versions a build used are recorded in its Info.plist by

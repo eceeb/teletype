@@ -21,6 +21,12 @@ public struct DependencyUpdate: Sendable {
     public let dependency: Dependency
     public let status: UpdateStatus?
     public let failed: Bool
+
+    public init(dependency: Dependency, status: UpdateStatus?, failed: Bool) {
+        self.dependency = dependency
+        self.status = status
+        self.failed = failed
+    }
 }
 
 /// Asks GitHub for the newest release of each dependency.
@@ -74,5 +80,24 @@ public struct UpdateChecker: Sendable {
         guard let lastCheck else { return true }
         if lastCheck > now { return true }
         return now.timeIntervalSince(lastCheck) >= interval
+    }
+}
+
+/// The short, two-line form the sidebar shows when something is out of date.
+public enum UpdateNotice {
+    public struct Text: Equatable, Sendable {
+        public let title: String
+        public let detail: String
+    }
+
+    public static func text(for updates: [DependencyUpdate]) -> Text? {
+        guard !updates.isEmpty else { return nil }
+        let major = updates.contains { $0.status?.isMajorStep == true }
+        let detail = major ? "New major version" : "Update available"
+
+        if updates.count == 1, let only = updates.first, let status = only.status {
+            return Text(title: "\(only.dependency.name) \(status.latest)", detail: detail)
+        }
+        return Text(title: "\(updates.count) library updates", detail: detail)
     }
 }

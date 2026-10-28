@@ -43,6 +43,12 @@ final class MainWindowController: NSWindowController, NSWindowDelegate {
         tabBar.onNew = { [weak self] in self?.newTab() }
         tabBar.onRenameGroup = { [weak self] groupIndex, name in self?.renameGroup(groupIndex, to: name) }
         applySidebarAppearance()
+        tabBar.onUpdateNoticeClick = { UpdateNotifier.checkNow() }
+        // The check finishes after the window is up; show whatever it finds.
+        UpdateNotifier.onResult = { [weak self] in
+            MainActor.assumeIsolated { self?.showUpdateNotice() }
+        }
+        showUpdateNotice()
 
         // Restore saved frame (or center on first run) and keep it saved.
         let autosave = NSWindow.FrameAutosaveName("TeletypeMainWindow")
@@ -55,6 +61,7 @@ final class MainWindowController: NSWindowController, NSWindowDelegate {
             MainActor.assumeIsolated {
                 self?.rootView.placement = self?.placementFromSettings() ?? .top
                 self?.applySidebarAppearance()
+                self?.showUpdateNotice()
             }
         }
 
@@ -104,6 +111,17 @@ final class MainWindowController: NSWindowController, NSWindowDelegate {
 
     private func placementFromSettings() -> TabPlacement {
         AppSettings.store.tabPlacement == "left" ? .left : .top
+    }
+
+    /// Puts whatever the update check found at the bottom of the sidebar.
+    private func showUpdateNotice() {
+        let foreground = AppSettings.store.sidebarColor.map { color -> NSColor in
+            let luminance = 0.299 * Double(color.red) + 0.587 * Double(color.green)
+                + 0.114 * Double(color.blue)
+            return luminance < 140 ? .white : .black
+        }
+        rootView.showUpdateNotice(UpdateNotice.text(for: UpdateNotifier.pendingUpdates),
+                                  foreground: foreground)
     }
 
     /// Pushes the chosen sidebar color (and a contrasting text color) to the bar.

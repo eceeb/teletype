@@ -23,10 +23,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         if ProcessInfo.processInfo.arguments.contains("-probeQuietly") {
             NSApp.setActivationPolicy(.accessory)
             controller.window?.orderBack(nil)
-            return
+        } else {
+            controller.showWindow(nil)
+            NSApp.activate(ignoringOtherApps: true)
         }
-        controller.showWindow(nil)
-        NSApp.activate(ignoringOtherApps: true)
+        // Runs either way: a quiet probe is still the app, just out of the way.
         UpdateNotifier.checkInBackground()
     }
 
@@ -140,15 +141,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                                       keyEquivalent: ",")
         settingsItem.target = self
         appMenu.addItem(settingsItem)
-        let updateItem = NSMenuItem(title: UpdateNotifier.menuTitle,
+        // What the check finds is shown at the bottom of the sidebar; this item
+        // is for asking on the spot.
+        let updateItem = NSMenuItem(title: "Check for Updates…",
                                     action: #selector(checkForUpdates(_:)), keyEquivalent: "")
         updateItem.target = self
         appMenu.addItem(updateItem)
-        // The background check finishes after the menu is built, so let it
-        // rename this item rather than interrupting with a dialog.
-        UpdateNotifier.onResult = { [weak updateItem] in
-            updateItem?.title = UpdateNotifier.menuTitle
-        }
         appMenu.addItem(.separator())
         // Without these the standard ⌘H / ⌥⌘H do nothing at all: a key
         // equivalent only exists if some menu item carries it.

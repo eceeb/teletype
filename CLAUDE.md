@@ -65,6 +65,10 @@ env -u GIT_EDITOR ./.build/debug/Teletype -probeQuietly -shell /path/to/probe.sh
 # find its CGWindow id by pid, then: screencapture -o -x -l <id> shot.png
 ```
 
+`-probeUpdateNotice` feeds a sample result into the update check, so the sidebar
+notice can be looked at in a dev build (which has no Info.plist and therefore no
+recorded dependency versions to compare).
+
 Identify the dev instance by pid, never by process name — the installed app is
 also called "Teletype", and matching by name hits the wrong one. Mouse clicks
 are delivered through the window hierarchy, so a click test needs a normally

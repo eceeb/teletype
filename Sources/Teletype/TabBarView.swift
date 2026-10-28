@@ -1,4 +1,5 @@
 import AppKit
+import TeletypeCore
 
 /// Where the tab bar sits.
 enum TabPlacement: String {
@@ -87,6 +88,8 @@ final class TabBarView: NSView, NSTextFieldDelegate {
     private var activeIndex = 0
     private var tabViews: [NSView] = []
     private let plusButton = NSButton(title: "+", target: nil, action: nil)
+    /// Update hint, below the "+" button — the bottom of the sidebar.
+    private let updateNotice = UpdateNoticeView()
     /// Clickable rects of the group headers, refreshed on each draw (left placement).
     private var headerBoxes: [(rect: NSRect, group: Int)] = []
     private var editField: NSTextField?
@@ -112,11 +115,26 @@ final class TabBarView: NSView, NSTextFieldDelegate {
         plusButton.target = self
         plusButton.action = #selector(addTab)
         addSubview(plusButton)
+        updateNotice.isHidden = true
+        addSubview(updateNotice)
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
     override var isFlipped: Bool { true }
+
+    /// Shows (or hides) the update hint and re-lays out around it.
+    func showUpdateNotice(_ text: UpdateNotice.Text?, foreground: NSColor?) {
+        updateNotice.show(text, foreground: foreground)
+        updateNotice.isHidden = text == nil || placement != .left
+        needsLayout = true
+    }
+
+    /// Lets the window controller hook up the click.
+    var onUpdateNoticeClick: (() -> Void)? {
+        get { updateNotice.onClick }
+        set { updateNotice.onClick = newValue }
+    }
 
     func update(_ items: [TabItem], active: Int) {
         self.items = items
@@ -181,6 +199,7 @@ final class TabBarView: NSView, NSTextFieldDelegate {
                 x += width + 4
             }
             plusButton.frame = NSRect(x: x, y: y, width: 30, height: height)
+            updateNotice.isHidden = true   // no sidebar to put it in
             growToFit(extent: x + 30 + 6)
         case .left:
             let baseHeight: CGFloat = 26
@@ -200,7 +219,12 @@ final class TabBarView: NSView, NSTextFieldDelegate {
                 y += rowHeight + 3
             }
             plusButton.frame = NSRect(x: 8, y: y + 6, width: bounds.width - 16, height: 24)
-            growToFit(extent: y + 6 + 24 + 8)
+            var bottom = y + 6 + 24 + 8
+            if !updateNotice.isHidden {
+                updateNotice.frame = NSRect(x: 8, y: bottom + 4, width: bounds.width - 16, height: 44)
+                bottom += 4 + 44 + 8
+            }
+            growToFit(extent: bottom)
         }
         needsDisplay = true
     }
@@ -329,6 +353,11 @@ final class MainContentView: NSView {
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
     override var isFlipped: Bool { true }
+
+    /// Shows (or hides) the update hint at the bottom of the sidebar.
+    func showUpdateNotice(_ text: UpdateNotice.Text?, foreground: NSColor?) {
+        tabBar.showUpdateNotice(placement == .left ? text : nil, foreground: foreground)
+    }
 
     /// Sizes the bar to its content along the scrolling axis, so the enclosing
     /// scroll view can actually reach the last rows and the "+" button. Without
