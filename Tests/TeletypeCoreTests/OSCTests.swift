@@ -30,6 +30,18 @@ struct OSCTests {
         #expect(terminal.programBackground == nil)
     }
 
+    @Test func theHandlerMayReadTheColorsBack() {
+        // What the app actually does: repaint from the new colors. Reading them
+        // inside the callback used to trap on exclusive access.
+        let terminal = emulator()
+        var seen: TermColor?
+        terminal.onColorsChanged = { seen = terminal.programBackground }
+
+        terminal.feed(Data("\u{1b}]11;rgb:10/14/30\u{7}".utf8))
+
+        #expect(seen == TermColor(red: 0x10, green: 0x14, blue: 0x30))
+    }
+
     @Test func aCursorColorComesThroughToo() {
         let terminal = emulator()
         terminal.feed(Data("\u{1b}]12;rgb:ff/00/88\u{7}".utf8))

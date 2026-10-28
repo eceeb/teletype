@@ -444,21 +444,29 @@ public final class TerminalEmulator {
 
         // SwiftTerm reports OSC 10/11 through two paths, so each sequence
         // arrives twice; only a real change is worth a repaint.
+        //
+        // Each of these assigns first and calls back afterwards, deliberately
+        // not through a shared `inout` helper: the handler reads these same
+        // properties to repaint, and an inout parameter holds exclusive access
+        // across the call — which trapped at runtime.
         func setForegroundColor(source: Terminal, color: SwiftTerm.Color) {
-            update(&programForeground, to: term(color))
+            let new = term(color)
+            guard programForeground != new else { return }
+            programForeground = new
+            onColorsChanged?()
         }
 
         func setBackgroundColor(source: Terminal, color: SwiftTerm.Color) {
-            update(&programBackground, to: term(color))
+            let new = term(color)
+            guard programBackground != new else { return }
+            programBackground = new
+            onColorsChanged?()
         }
 
         func setCursorColor(source: Terminal, color: SwiftTerm.Color?) {
-            update(&programCursorColor, to: color.map(term))
-        }
-
-        private func update(_ stored: inout TermColor?, to color: TermColor?) {
-            guard stored != color else { return }
-            stored = color
+            let new = color.map(term)
+            guard programCursorColor != new else { return }
+            programCursorColor = new
             onColorsChanged?()
         }
 
