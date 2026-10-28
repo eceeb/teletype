@@ -14,8 +14,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         AppIconCatalog.applyFromSettings()   // Dock icon the user picked in Settings
         setupMainMenu()
         let controller = MainWindowController()
-        controller.showWindow(nil)
         mainController = controller
+
+        // `-probeQuietly` is for automated checks of a dev build: the window is
+        // still real and still renders (so a screenshot of it works), but it
+        // never takes focus or shows up in the Dock, which otherwise makes a
+        // test run keep interrupting whoever is at the keyboard.
+        if ProcessInfo.processInfo.arguments.contains("-probeQuietly") {
+            NSApp.setActivationPolicy(.accessory)
+            controller.window?.orderBack(nil)
+            return
+        }
+        controller.showWindow(nil)
         NSApp.activate(ignoringOtherApps: true)
     }
 
