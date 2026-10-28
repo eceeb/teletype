@@ -1,5 +1,6 @@
 import AppKit
 import Foundation
+@preconcurrency import UserNotifications
 import TeletypeCore
 
 /// One terminal pane: a live session plus the view that draws it. A tab holds
@@ -82,8 +83,20 @@ final class TerminalPane {
 
         session.onUpdate = { [weak view] in view?.markDirtyForOutput() }
         session.emulator.onBufferInvalidated = { [weak view] in view?.clearSelection() }
-        session.emulator.onCursorStyleChange = { [weak view] in view?.needsDisplay = true }
+        session.emulator.onCursorStyleChange = { [weak view] in
+            view?.updateCursorBlink()       // starts or stops the blink timer
+            view?.needsDisplay = true
+        }
         session.emulator.onBell = { [weak view] in view?.ringBell() }
+        session.emulator.onColorsChanged = { [weak self] in self?.applyAppearance() }
+        session.emulator.onClipboardCopy = { text in
+            // OSC 52 — how tmux and vim copy out of an SSH session.
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString(text, forType: .string)
+        }
+        session.emulator.onNotify = { title, body in
+            TerminalPane.notify(title: title, body: body)
+        }
         session.onExit = { [weak self] in self?.onExit?() }
         view.onInput = { [weak session] data in session?.write(data) }
         view.onResize = { [weak session] cols, rows in session?.resize(columns: cols, rows: rows) }
@@ -150,12 +163,31 @@ final class TerminalPane {
 
     private func applyAppearance() {
         let settings = AppSettings.store
-        session.emulator.setColors(background: settings.backgroundColor,
-                                   foreground: settings.foregroundColor,
+        // A program that set its own colors (OSC 10/11) wins over the theme —
+        // that is the point of sending them.
+        let background = session.emulator.programBackground ?? settings.backgroundColor
+        let foreground = session.emulator.programForeground ?? settings.foregroundColor
+        session.emulator.setColors(background: background, foreground: foreground,
                                    ansi16: ColorTheme.named(settings.themeName)?.ansi)
         view.applyAppearance(fontSize: CGFloat(settings.fontSize),
-                             background: NSColor(settings.backgroundColor),
-                             foreground: NSColor(settings.foregroundColor))
+                             background: NSColor(background),
+                             foreground: NSColor(foreground))
         session.emulator.setScrollback(settings.scrollbackLines)
+    }
+
+    /// Posts a notification for OSC 777. Needs a bundle identifier, which the
+    /// installed app has and a plain `swift build` binary does not — asking the
+    /// notification centre without one would trap.
+    private static func notify(title: String, body: String) {
+        guard Bundle.main.bundleIdentifier != nil else { return }
+        let content = UNMutableNotificationContent()
+        content.title = title.isEmpty ? "Teletype" : title
+        content.body = body
+        let center = UNUserNotificationCenter.current()
+        center.requestAuthorization(options: [.alert, .sound]) { granted, _ in
+            guard granted else { return }
+            center.add(UNNotificationRequest(identifier: UUID().uuidString,
+                                             content: content, trigger: nil))
+        }
     }
 }
