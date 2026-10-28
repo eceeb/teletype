@@ -89,6 +89,19 @@ public final class TerminalSettings: @unchecked Sendable {
         set { defaults.set(newValue.rawValue, forKey: Key.bellStyle) }
     }
 
+    /// Whether the app checks GitHub once a day for newer releases of the
+    /// libraries it was built against. Nothing is sent but the request itself.
+    public var checksForUpdates: Bool {
+        get { defaults.object(forKey: Key.checksForUpdates) as? Bool ?? true }
+        set { defaults.set(newValue, forKey: Key.checksForUpdates) }
+    }
+
+    /// When that check last ran, so it happens once a day and not on every launch.
+    public var lastUpdateCheck: Date? {
+        get { defaults.object(forKey: Key.lastUpdateCheck) as? Date }
+        set { defaults.set(newValue, forKey: Key.lastUpdateCheck) }
+    }
+
     /// Sidebar background color; nil → the system window background (default).
     public var sidebarColor: TermColor? {
         get { color(forKey: Key.sidebarColor) }
@@ -123,5 +136,7 @@ public final class TerminalSettings: @unchecked Sendable {
         static let appIconName = "appIconName"
         static let sidebarColor = "sidebarColor"
         static let bellStyle = "bellStyle"
+        static let checksForUpdates = "checksForUpdates"
+        static let lastUpdateCheck = "lastUpdateCheck"
     }
 }

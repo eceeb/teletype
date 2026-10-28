@@ -27,6 +27,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
         controller.showWindow(nil)
         NSApp.activate(ignoringOtherApps: true)
+        UpdateNotifier.checkInBackground()
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
@@ -104,6 +105,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         NSApp.activate(ignoringOtherApps: true)
     }
 
+    @objc func checkForUpdates(_ sender: Any?) { UpdateNotifier.checkNow() }
+
     @objc func openShortcuts(_ sender: Any?) {
         if shortcutsWindow == nil {
             let window = NSWindow(contentViewController: NSHostingController(rootView: ShortcutsView()))
@@ -137,6 +140,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                                       keyEquivalent: ",")
         settingsItem.target = self
         appMenu.addItem(settingsItem)
+        let updateItem = NSMenuItem(title: UpdateNotifier.menuTitle,
+                                    action: #selector(checkForUpdates(_:)), keyEquivalent: "")
+        updateItem.target = self
+        appMenu.addItem(updateItem)
+        // The background check finishes after the menu is built, so let it
+        // rename this item rather than interrupting with a dialog.
+        UpdateNotifier.onResult = { [weak updateItem] in
+            updateItem?.title = UpdateNotifier.menuTitle
+        }
         appMenu.addItem(.separator())
         // Without these the standard ⌘H / ⌥⌘H do nothing at all: a key
         // equivalent only exists if some menu item carries it.

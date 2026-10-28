@@ -18,6 +18,7 @@ struct SettingsView: View {
     @State private var tabsOnLeft = (AppSettings.store.tabPlacement == "left")
     @State private var appIcon = AppSettings.store.appIconName ?? AppIconCatalog.defaultID
     @State private var bellStyle = AppSettings.store.bellStyle
+    @State private var checksForUpdates = AppSettings.store.checksForUpdates
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -109,6 +110,8 @@ struct SettingsView: View {
                 }
             }
             Divider()
+            Toggle("Check for library updates daily", isOn: $checksForUpdates)
+                .help("Asks GitHub once a day whether the libraries this build uses have newer releases. Nothing but the request is sent.")
             Button("Keyboard Shortcuts…") {
                 NSApp.sendAction(#selector(AppDelegate.openShortcuts(_:)), to: nil, from: nil)
             }
@@ -153,6 +156,9 @@ struct SettingsView: View {
         .onChange(of: sidebarColor) { _, value in
             AppSettings.store.sidebarColor = TermColor(NSColor(value))
             AppSettings.notifyChanged()             // sidebar recolors live
+        }
+        .onChange(of: checksForUpdates) { _, value in
+            AppSettings.store.checksForUpdates = value
         }
         .onChange(of: bellStyle) { _, value in
             AppSettings.store.bellStyle = value     // read live by ringBell()

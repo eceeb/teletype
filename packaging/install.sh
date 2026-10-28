@@ -15,6 +15,21 @@ mkdir -p "$STAGE/Contents/MacOS" "$STAGE/Contents/Resources"
 cp .build/release/Teletype "$STAGE/Contents/MacOS/Teletype"
 cp -R .build/release/*.bundle "$STAGE/Contents/Resources/"
 cp packaging/Info.plist "$STAGE/Contents/Info.plist"
+
+# Record what this build was compiled against, so the app can tell whether its
+# libraries have been superseded. Read from Package.resolved — the versions
+# SwiftPM actually picked, not the range Package.swift allows.
+python3 - "$STAGE/Contents/Info.plist" <<'PYEOF'
+import json, plistlib, sys
+pins = json.load(open("Package.resolved")).get("pins", [])
+versions = {p["identity"]: p["state"].get("version", "") for p in pins}
+path = sys.argv[1]
+with open(path, "rb") as handle:
+    info = plistlib.load(handle)
+info["TeletypeDependencyVersions"] = {k: v for k, v in versions.items() if v}
+with open(path, "wb") as handle:
+    plistlib.dump(info, handle)
+PYEOF
 cp packaging/AppIcon.icns "$STAGE/Contents/Resources/AppIcon.icns"
 printf 'APPL????' > "$STAGE/Contents/PkgInfo"
 
