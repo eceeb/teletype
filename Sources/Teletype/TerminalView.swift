@@ -519,12 +519,17 @@ final class TerminalView: NSView {
             // gridlines between cells (very visible on a full-screen background).
             let y0 = (padding + CGFloat(row) * cellHeight).rounded()
             let y1 = (padding + CGFloat(row + 1) * cellHeight).rounded()
+
+            // Backgrounds and the selection stay per cell: each one can differ.
+            var cells: [TerminalCell?] = []
+            cells.reserveCapacity(emulator.columns)
             for col in 0..<emulator.columns {
-                guard let cell = emulator.cell(row: row, col: col) else { continue }
-                // The trailing half of a wide glyph (emoji, CJK) is a width-0
-                // placeholder — the wide cell already painted both halves. Filling
-                // it here would repaint background over the glyph's right half.
-                if cell.width == 0 { continue }
+                let cell = emulator.cell(row: row, col: col)
+                cells.append(cell)
+                // The trailing half of a wide glyph is a width-0 placeholder —
+                // the wide cell already painted both halves. Filling it here
+                // would repaint background over the glyph's right half.
+                guard let cell, cell.width != 0 else { continue }
                 let span = cell.width == 2 ? 2 : 1
                 let x0 = (padding + CGFloat(col) * cellWidth).rounded()
                 let x1 = (padding + CGFloat(col + span) * cellWidth).rounded()
@@ -541,17 +546,12 @@ final class TerminalView: NSView {
                     highlight.setFill()
                     rect.fill()
                 }
+            }
 
-                // Skip blanks and the trailing half of a wide glyph (width 0).
-                if cell.width > 0, cell.character != " " {
-                    var attributes: [NSAttributedString.Key: Any] = [
-                        .font: cell.bold ? boldFont : font,
-                        .foregroundColor: nsColor(legibleForeground(cell.foreground, on: cell.background))
-                    ]
-                    if cell.italic { attributes[.obliqueness] = 0.2 }
-                    if cell.underline { attributes[.underlineStyle] = NSUnderlineStyle.single.rawValue }
-                    (String(cell.character) as NSString).draw(at: rect.origin, withAttributes: attributes)
-                }
+            // Text goes out a run at a time instead of a character at a time:
+            // one CoreText call for a whole stretch of same-looking cells.
+            for run in CellRun.runs(in: cells) {
+                draw(run, y: y0)
             }
         }
 
@@ -585,6 +585,24 @@ final class TerminalView: NSView {
         return NSRect(x: padding + CGFloat(cursor.column) * cellWidth,
                       y: padding + CGFloat(cursor.row) * cellHeight,
                       width: cellWidth, height: cellHeight)
+    }
+
+    /// Draws one run. `.kern` pins every glyph to the cell grid: the font's own
+    /// advance is fractional, so without it a long run would drift away from
+    /// the cell backgrounds painted underneath.
+    private func draw(_ run: CellRun, y: CGFloat) {
+        let font = run.bold ? boldFont : self.font
+        var attributes: [NSAttributedString.Key: Any] = [
+            .font: font,
+            .foregroundColor: nsColor(legibleForeground(run.foreground, on: run.background))
+        ]
+        if run.italic { attributes[.obliqueness] = 0.2 }
+        if run.underline { attributes[.underlineStyle] = NSUnderlineStyle.single.rawValue }
+        if !run.isWide, run.text.count > 1 {
+            attributes[.kern] = cellWidth - TerminalView.exactAdvance(of: font)
+        }
+        let x = (padding + CGFloat(run.startColumn) * cellWidth).rounded()
+        (run.text as NSString).draw(at: CGPoint(x: x, y: y), withAttributes: attributes)
     }
 
     private func drawCursor() {
@@ -631,6 +649,12 @@ final class TerminalView: NSView {
     /// ("0") rather than `maximumAdvancement`, which a Nerd Font inflates with its
     /// wide icon glyphs (that made every cell too wide). Rounding to an integer
     /// keeps columns evenly spaced and lets cell backgrounds tile without seams.
+    /// The font's real, unrounded advance. `advance(of:)` rounds it to keep the
+    /// grid even; the difference is what `.kern` has to make up per glyph.
+    private static func exactAdvance(of font: NSFont) -> CGFloat {
+        ("0" as NSString).size(withAttributes: [.font: font]).width
+    }
+
     private static func advance(of font: NSFont) -> CGFloat {
         let width = ("0" as NSString).size(withAttributes: [.font: font]).width
         return max(1, width.rounded())
