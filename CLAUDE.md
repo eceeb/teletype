@@ -52,6 +52,23 @@ env -u GIT_EDITOR ./.build/debug/Teletype -tabPlacement left  # force the sideba
 The dev binary has no bundle id, so it uses its own `UserDefaults` domain (starts
 with default settings, won't touch the user's). `-tabPlacement left` uses the
 NSUserDefaults argument domain to flip to the sidebar without persisting anything.
+Two consequences of the missing bundle id: `NSWorkspace.open` silently does
+nothing (so ⌘-click on a link can only be checked in the installed app), and
+notifications are skipped on purpose.
+
+For automated checks, `-probeQuietly` starts the window without taking focus or
+a Dock slot, so a run doesn't keep interrupting whoever is at the keyboard. It
+still renders, so screenshot it by window id:
+
+```sh
+env -u GIT_EDITOR ./.build/debug/Teletype -probeQuietly -shell /path/to/probe.sh
+# find its CGWindow id by pid, then: screencapture -o -x -l <id> shot.png
+```
+
+Identify the dev instance by pid, never by process name — the installed app is
+also called "Teletype", and matching by name hits the wrong one. Mouse clicks
+are delivered through the window hierarchy, so a click test needs a normally
+activated window; `-probeQuietly` is for screenshots only.
 
 ## Conventions
 
