@@ -293,7 +293,11 @@ public final class TerminalEmulator {
         if attribute.style.contains(.inverse) {
             swap(&foreground, &background)
         }
-        let raw = data.getCharacter()
+        // Via the terminal, not CharData.getCharacter(): a cell can hold a
+        // pointer into a grapheme-cluster table rather than a bare rune, and
+        // only the terminal can resolve that. Reading it the other way turned
+        // every emoji — anything outside the BMP — into a blank.
+        let raw = terminal.getCharacter(for: data)
         let character: Character = (raw.unicodeScalars.first?.value ?? 0) == 0 ? " " : raw
         return TerminalCell(
             character: character,
