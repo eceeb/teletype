@@ -91,6 +91,31 @@ public final class TerminalEmulator {
     /// How the running program wants the cursor drawn (DECSCUSR).
     public var cursorStyle: TerminalCursorStyle { delegate.cursorStyle }
 
+    /// Colors a program set with OSC 10/11/12, if it did. A theme switcher in
+    /// a shell prompt sends these; nil means "the user's own setting stands".
+    public var programForeground: TermColor? { delegate.programForeground }
+    public var programBackground: TermColor? { delegate.programBackground }
+    public var programCursorColor: TermColor? { delegate.programCursorColor }
+
+    /// Called when a program changed any of the colors above.
+    public var onColorsChanged: (() -> Void)? {
+        get { delegate.onColorsChanged }
+        set { delegate.onColorsChanged = newValue }
+    }
+
+    /// Called when a program puts text on the clipboard with OSC 52 — what tmux
+    /// and vim use to copy out of an SSH session.
+    public var onClipboardCopy: ((String) -> Void)? {
+        get { delegate.onClipboardCopy }
+        set { delegate.onClipboardCopy = newValue }
+    }
+
+    /// Called when a program raises a notification (OSC 9) with title and body.
+    public var onNotify: ((String, String) -> Void)? {
+        get { delegate.onNotify }
+        set { delegate.onNotify = newValue }
+    }
+
     /// Called when a program rings the bell (BEL).
     public var onBell: (() -> Void)? {
         get { delegate.onBell }
@@ -388,6 +413,12 @@ public final class TerminalEmulator {
         var cursorStyle = TerminalCursorStyle(shape: .block, blinks: false)
         var onCursorStyleChange: (() -> Void)?
         var onBell: (() -> Void)?
+        var programForeground: TermColor?
+        var programBackground: TermColor?
+        var programCursorColor: TermColor?
+        var onColorsChanged: (() -> Void)?
+        var onClipboardCopy: ((String) -> Void)?
+        var onNotify: ((String, String) -> Void)?
         var onChange: (() -> Void)?
         var onSend: ((ArraySlice<UInt8>) -> Void)?
         func send(source: Terminal, data: ArraySlice<UInt8>) { onSend?(data) }
@@ -399,6 +430,46 @@ public final class TerminalEmulator {
         }
         func hostCurrentDirectoryUpdated(source: Terminal) { onChange?() }
         func bell(source: Terminal) { onBell?() }
+
+        // SwiftTerm's Color is 16 bits per channel; ours is 8.
+        private func term(_ color: SwiftTerm.Color) -> TermColor {
+            TermColor(red: UInt8(color.red >> 8),
+                      green: UInt8(color.green >> 8),
+                      blue: UInt8(color.blue >> 8))
+        }
+
+        // SwiftTerm reports OSC 10/11 through two paths, so each sequence
+        // arrives twice; only a real change is worth a repaint.
+        func setForegroundColor(source: Terminal, color: SwiftTerm.Color) {
+            update(&programForeground, to: term(color))
+        }
+
+        func setBackgroundColor(source: Terminal, color: SwiftTerm.Color) {
+            update(&programBackground, to: term(color))
+        }
+
+        func setCursorColor(source: Terminal, color: SwiftTerm.Color?) {
+            update(&programCursorColor, to: color.map(term))
+        }
+
+        private func update(_ stored: inout TermColor?, to color: TermColor?) {
+            guard stored != color else { return }
+            stored = color
+            onColorsChanged?()
+        }
+
+        func clipboardCopy(source: Terminal, content: Data) {
+            onClipboardCopy?(String(decoding: content, as: UTF8.self))
+        }
+
+        /// Deliberately never answers. A program that could *read* the clipboard
+        /// would be handing itself whatever the user last copied — a password,
+        /// say — with no way for them to notice.
+        func clipboardRead(source: Terminal) -> Data? { nil }
+
+        func notify(source: Terminal, title: String, body: String) {
+            onNotify?(title, body)
+        }
         func cursorStyleChanged(source: Terminal, newStyle: CursorStyle) {
             switch newStyle {
             case .blinkBlock:      cursorStyle = .init(shape: .block, blinks: true)

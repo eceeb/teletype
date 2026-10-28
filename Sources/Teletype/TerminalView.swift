@@ -39,6 +39,11 @@ final class TerminalView: NSView {
     private var currentHit: SearchMatch?
     /// The fading overlay of a visual bell, while one is running.
     private var bellFlash: NSView?
+    /// Blink state, and the timer driving it. The timer only exists while a
+    /// program actually asked for a blinking cursor and this pane has focus —
+    /// an idle pane costs nothing.
+    private var cursorBlinkTimer: Timer?
+    private var cursorIsOn = true
 
     init(emulator: TerminalEmulator, fontSize: CGFloat = 13, background: NSColor = .black, foreground: NSColor = .white) {
         self.emulator = emulator
@@ -81,7 +86,13 @@ final class TerminalView: NSView {
 
     override func becomeFirstResponder() -> Bool {
         onFocus?()
+        defer { updateCursorBlink() }
         return super.becomeFirstResponder()
+    }
+
+    override func resignFirstResponder() -> Bool {
+        defer { updateCursorBlink() }
+        return super.resignFirstResponder()
     }
 
     override func keyDown(with event: NSEvent) {
@@ -547,8 +558,38 @@ final class TerminalView: NSView {
         drawCursor()
     }
 
+    /// Starts or stops the blink timer to match the program's wish and focus.
+    func updateCursorBlink() {
+        let wanted = emulator.cursorStyle.blinks && window?.firstResponder === self
+        guard wanted != (cursorBlinkTimer != nil) else { return }
+        if wanted {
+            cursorBlinkTimer = Timer.scheduledTimer(withTimeInterval: 0.53, repeats: true) {
+                [weak self] _ in
+                MainActor.assumeIsolated {
+                    guard let self else { return }
+                    self.cursorIsOn.toggle()
+                    self.setNeedsDisplay(self.cursorRect())
+                }
+            }
+        } else {
+            cursorBlinkTimer?.invalidate()
+            cursorBlinkTimer = nil
+            cursorIsOn = true
+            needsDisplay = true
+        }
+    }
+
+    /// The cell the cursor sits in.
+    private func cursorRect() -> NSRect {
+        let cursor = emulator.cursorPosition
+        return NSRect(x: padding + CGFloat(cursor.column) * cellWidth,
+                      y: padding + CGFloat(cursor.row) * cellHeight,
+                      width: cellWidth, height: cellHeight)
+    }
+
     private func drawCursor() {
         guard emulator.cursorVisible, !emulator.isScrolledBack else { return }
+        guard cursorIsOn || cursorBlinkTimer == nil else { return }
         let cursor = emulator.cursorPosition
         guard cursor.row >= 0, cursor.row < emulator.rows,
               cursor.column >= 0, cursor.column < emulator.columns else { return }
@@ -581,7 +622,8 @@ final class TerminalView: NSView {
         case .bar:
             rect = CGRect(x: cell.minX, y: cell.minY, width: thickness, height: cell.height)
         }
-        foregroundColor.withAlphaComponent(0.6).setFill()
+        let color = emulator.programCursorColor.map { NSColor($0) } ?? foregroundColor
+        color.withAlphaComponent(0.6).setFill()
         rect.fill()
     }
 
