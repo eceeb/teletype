@@ -102,7 +102,13 @@ final class TerminalTab {
 
         if let parent = oldView.superview as? NSSplitView {
             let index = parent.arrangedSubviews.firstIndex(of: oldView) ?? 0
+            // Hand the new split the space the old pane occupied. NSSplitView
+            // divides a parent by its children's *current* frames, so inserting
+            // a fresh (zero-sized) view collapses that slot to nothing and the
+            // sibling grows over the whole tab.
+            let slot = oldView.frame
             oldView.removeFromSuperview()
+            split.frame = slot
             split.addArrangedSubview(oldView)
             split.addArrangedSubview(newPane.view)
             parent.insertArrangedSubview(split, at: index)
