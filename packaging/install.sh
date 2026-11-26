@@ -4,6 +4,18 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
+# SwiftUI's @State and friends are macros, and the macro plugins ship only with
+# the full Xcode — with xcode-select pointing at the Command Line Tools the
+# build dies on "plugin for module 'SwiftUIMacros' not found". Pick the newest
+# installed Xcode in that case; an explicit DEVELOPER_DIR always wins.
+if [ -z "${DEVELOPER_DIR:-}" ] && [ "$(xcode-select -p)" = "/Library/Developer/CommandLineTools" ]; then
+	XCODE="$(ls -d /Applications/Xcode*.app 2>/dev/null | sort -V | tail -1)"
+	if [ -n "$XCODE" ]; then
+		export DEVELOPER_DIR="$XCODE/Contents/Developer"
+		echo "xcode-select points at the Command Line Tools — using $XCODE"
+	fi
+fi
+
 echo "Building release…"
 swift build -c release --product Teletype
 
